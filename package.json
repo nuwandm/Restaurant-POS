@@ -1,0 +1,48 @@
+{
+  "name": "hotel-pos-system",
+  "version": "1.0.0",
+  "description": "High-performance offline-first Hotel POS System",
+  "author": "DreamLabs IT Solutions",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
+    "dev:vite": "vite --port 5173 --strictPort",
+    "dev:electron": "wait-on http-get://localhost:5173 --timeout 30000 && node_modules\\electron\\dist\\electron.exe .",
+    "build": "vite build && electron-builder",
+    "preview": "vite preview",
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "server": "node server.js",
+    "start": "concurrently -k \"npm run dev:vite\" \"npm run server\""
+  },
+  "dependencies": {
+    "@reduxjs/toolkit": "^2.0.1",
+    "@tanstack/react-virtual": "^3.0.0",
+    "better-sqlite3": "^12.10.0",
+    "cors": "^2.8.6",
+    "date-fns": "^3.0.6",
+    "electron-store": "^8.1.0",
+    "escpos": "^3.0.0-alpha.6",
+    "escpos-usb": "^3.0.0-alpha.4",
+    "express": "^5.2.1",
+    "lodash": "^4.17.21",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.4.1",
+    "react-redux": "^9.0.4",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.7",
+    "@types/react": "^18.2.45",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
+    "electron": "^33.4.11",
+    "electron-builder": "^24.9.1",
+    "electron-rebuild": "^3.2.9",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "vite": "^5.0.10",
+    "wait-on": "^7.2.0"
+  }
+}
