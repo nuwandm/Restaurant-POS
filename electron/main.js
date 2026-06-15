@@ -4,6 +4,7 @@ const { initDatabase } = require("./database/init");
 const { checkLicense, activateLicense, getMachineId } = require("./license");
 const { setupKotPrinter } = require("./kotPrinter");
 const { setupReceiptPrinter } = require("./receiptPrinter");
+const { setupPinRecovery } = require("./pinRecovery");
 
 let mainWindow;
 let db;
@@ -78,6 +79,7 @@ app.whenReady().then(async () => {
 
   setupKotPrinter();
   setupReceiptPrinter();
+  setupPinRecovery(ipcMain, () => db, getMachineId);
   createWindow();
 });
 

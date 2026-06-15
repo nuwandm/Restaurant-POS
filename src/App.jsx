@@ -43,6 +43,7 @@ import LicenseGate from './components/LicenseGate';
 import ShortcutsHelp from './components/ShortcutsHelp';
 import ShiftOpenOverlay from './components/Shift/ShiftOpenOverlay';
 import PinLoginScreen from './components/Auth/PinLoginScreen';
+import SetPinScreen from './components/Auth/SetPinScreen';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { loadAppShortcuts } from './utils/itemShortcuts';
 import toast from 'react-hot-toast';
@@ -55,6 +56,7 @@ const SettingsView = lazy(() => import('./views/SettingsView'));
 const TableManagementView = lazy(() => import('./views/TableManagementView'));
 const KitchenView = lazy(() => import('./views/KitchenView'));
 const ShiftView = lazy(() => import('./views/ShiftView'));
+const StaffView = lazy(() => import('./views/StaffView'));
 
 function App() {
   const dispatch = useDispatch();
@@ -92,6 +94,7 @@ function App() {
     'nav-tables':   () => navTo('tables'),
     'nav-settings': () => navTo('settings'),
     'nav-shift':    () => navTo('shift'),
+    'nav-staff':    () => navTo('staff'),
   }), [currentUser]);
 
   useEffect(() => {
@@ -192,6 +195,9 @@ function App() {
         {/* PIN login gate — shown when no user is logged in */}
         {!currentUser && <PinLoginScreen />}
 
+        {/* Force PIN setup after admin reset */}
+        {currentUser?.pin_reset_required === 1 && <SetPinScreen />}
+
         <Layout
           currentView={currentView}
           onViewChange={(v) => navTo(v)}
@@ -211,6 +217,7 @@ function App() {
             {currentView === 'tables'   && canViewPage(role, 'tables')   && <TableManagementView />}
             {currentView === 'settings' && canViewPage(role, 'settings') && <SettingsView onHotelNameChange={setHotelName} />}
             {currentView === 'shift'    && canViewPage(role, 'shift')    && <ShiftView />}
+            {currentView === 'staff'    && canViewPage(role, 'staff')    && <StaffView />}
           </Suspense>
         </Layout>
 

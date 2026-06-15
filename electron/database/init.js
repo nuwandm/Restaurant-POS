@@ -228,6 +228,10 @@ class DatabaseManager {
       );
     `);
 
+    // ── staff: pin reset flag ──
+    const staffCols = this.db.prepare("PRAGMA table_info(staff)").all().map(c => c.name);
+    if (!staffCols.includes('pin_reset_required')) this.db.exec("ALTER TABLE staff ADD COLUMN pin_reset_required INTEGER DEFAULT 0");
+
     // ── void_kots audit table ──
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS void_kots (
@@ -299,14 +303,13 @@ class DatabaseManager {
       ["Chef Special", "SPC001", "Specials", 29.99, 30],
     ]) menuStmt.run(item);
 
-    const staffStmt = this.db.prepare(
-      "INSERT OR IGNORE INTO staff (name, role, pin) VALUES (?, ?, ?)"
-    );
-    for (const s of [
-      ["Admin", "admin", "0000"],
-      ["John Cashier", "cashier", "1111"],
-      ["Jane Waiter", "waiter", "2222"],
-    ]) staffStmt.run(s);
+    // Seed a default admin only on first run (when no staff exist yet)
+    const staffCount = this.db.prepare("SELECT COUNT(*) as c FROM staff WHERE is_active=1").get();
+    if (staffCount.c === 0) {
+      this.db.prepare(
+        "INSERT INTO staff (name, role, pin) VALUES (?, ?, ?)"
+      ).run("Admin", "admin", "0000");
+    }
   }
 
   query(action, data) {
@@ -843,20 +846,34 @@ class DatabaseManager {
 
       // ── Staff / Auth ──────────────────────────────────────────────────────
       case "loginWithPin": {
-        const staff = this.db.prepare(
-          "SELECT id, name, role FROM staff WHERE pin=? AND is_active=1"
-        ).get(data.pin);
+        const staff = data.id
+          ? this.db.prepare("SELECT id, name, role, pin_reset_required FROM staff WHERE id=? AND pin=? AND is_active=1").get(data.id, data.pin)
+          : this.db.prepare("SELECT id, name, role, pin_reset_required FROM staff WHERE pin=? AND is_active=1").get(data.pin);
         if (!staff) return { success: false, error: "Invalid PIN" };
         this.db.prepare("UPDATE staff SET last_login=CURRENT_TIMESTAMP WHERE id=?").run(staff.id);
         return { success: true, staff };
       }
 
+      case "resetStaffPin": {
+        // Admin sets a temporary PIN and marks pin_reset_required=1
+        this.db.prepare(
+          "UPDATE staff SET pin=?, pin_reset_required=1 WHERE id=?"
+        ).run(data.tempPin, data.id);
+        return { success: true };
+      }
+
+      case "setOwnPin": {
+        // User sets their own PIN after a reset (clears the flag)
+        this.db.prepare(
+          "UPDATE staff SET pin=?, pin_reset_required=0 WHERE id=?"
+        ).run(data.pin, data.id);
+        return { success: true };
+      }
+
       case "getStaff":
-        return this.db.prepare("SELECT id, name, role, pin, email, phone, is_active, created_at, last_login FROM staff ORDER BY name").all();
+        return this.db.prepare("SELECT id, name, role, pin, email, phone, is_active, pin_reset_required, created_at, last_login FROM staff ORDER BY name").all();
 
       case "addStaff": {
-        const exists = this.db.prepare("SELECT id FROM staff WHERE pin=? AND is_active=1").get(data.pin);
-        if (exists) throw new Error("A staff member with this PIN already exists.");
         const { lastInsertRowid } = this.db.prepare(
           "INSERT INTO staff (name, role, pin, email, phone, is_active) VALUES (?,?,?,?,?,1)"
         ).run(data.name, data.role, data.pin, data.email || null, data.phone || null);
@@ -864,10 +881,6 @@ class DatabaseManager {
       }
 
       case "updateStaff": {
-        if (data.pin) {
-          const conflict = this.db.prepare("SELECT id FROM staff WHERE pin=? AND is_active=1 AND id!=?").get(data.pin, data.id);
-          if (conflict) throw new Error("Another staff member already uses this PIN.");
-        }
         this.db.prepare(
           "UPDATE staff SET name=?, role=?, pin=?, email=?, phone=? WHERE id=?"
         ).run(data.name, data.role, data.pin, data.email || null, data.phone || null, data.id);

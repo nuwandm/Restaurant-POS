@@ -187,9 +187,42 @@
     border-top: 1px solid #2d3148;
     margin: 20px 0;
   }
+
+  /* ── Tab bar ── */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    width: 100%;
+    max-width: 520px;
+  }
+  .tab-link {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    background: #1e2130;
+    border: 1px solid #2d3148;
+    color: #6b7a9e;
+    transition: all 0.2s;
+  }
+  .tab-link:hover { background: #252a3d; color: #aab; }
+  .tab-link.active {
+    background: #1a237e22;
+    border-color: #3b5bdb;
+    color: #748ffc;
+  }
 </style>
 </head>
 <body>
+
+<div class="tabs">
+  <a href="keygen.html" class="tab-link active">🔐 License Keygen</a>
+  <a href="recovery-keygen.html" class="tab-link">🔓 PIN Recovery</a>
+</div>
 
 <div class="card">
   <div class="header">

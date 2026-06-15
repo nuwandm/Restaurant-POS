@@ -1,15 +1,18 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
-export const loginWithPin = createAsyncThunk('auth/loginWithPin', async (pin) => {
-  const res = await window.electron.database({ action: 'loginWithPin', data: { pin } });
-  if (!res.success) throw new Error(res.error || res.data?.error || 'Invalid PIN');
-  return res.data.staff; // { id, name, role }
+// payload: { pin, id? } — id ties the login to a specific staff member selected on screen
+export const loginWithPin = createAsyncThunk('auth/loginWithPin', async ({ pin, id }) => {
+  const res = await window.electron.database({ action: 'loginWithPin', data: { pin, id } });
+  // IPC wraps every result: { success: true, data: <DB result> }
+  // The DB loginWithPin itself returns { success: bool, staff?, error? }
+  if (!res.success || !res.data?.success) throw new Error(res.data?.error || res.error || 'Invalid PIN');
+  return res.data.staff; // { id, name, role, pin_reset_required }
 });
 
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
-    currentUser: null,  // { id, name, role }
+    currentUser: null,  // { id, name, role, pin_reset_required }
     loading: false,
     error: null,
   },
@@ -19,6 +22,9 @@ const authSlice = createSlice({
       state.error = null;
     },
     clearAuthError: (state) => { state.error = null; },
+    clearPinResetRequired: (state) => {
+      if (state.currentUser) state.currentUser.pin_reset_required = 0;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -28,5 +34,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, clearAuthError } = authSlice.actions;
+export const { logout, clearAuthError, clearPinResetRequired } = authSlice.actions;
 export default authSlice.reducer;

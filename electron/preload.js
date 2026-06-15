@@ -15,4 +15,8 @@ contextBridge.exposeInMainWorld("electron", {
   minimizeApp: () => ipcRenderer.invoke("app:minimize"),
   maximizeApp: () => ipcRenderer.invoke("app:maximize"),
   openExternal: (url) => ipcRenderer.invoke("app:openExternal", url),
+  recovery: {
+    getMachineId:   ()             => ipcRenderer.invoke("recovery:getMachineId"),
+    resetAdminPin:  (machineId, code) => ipcRenderer.invoke("recovery:resetAdminPin", { machineId, code }),
+  },
 });

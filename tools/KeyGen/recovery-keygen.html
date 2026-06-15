@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hotel POS — Admin PIN Recovery | DreamLabs IT Solutions</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #0f1117 0%, #131620 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    color: #fff;
+  }
+
+  /* ── Tab bar ── */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    width: 100%;
+    max-width: 520px;
+  }
+  .tab-link {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    background: #1e2130;
+    border: 1px solid #2d3148;
+    color: #6b7a9e;
+    transition: all 0.2s;
+  }
+  .tab-link:hover { background: #252a3d; color: #aab; }
+  .tab-link.active {
+    background: #2a1f3d;
+    border-color: #7c3aed;
+    color: #a78bfa;
+  }
+
+  .card {
+    background: #1e2130;
+    border: 1px solid #2d3148;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 520px;
+    overflow: hidden;
+    box-shadow: 0 32px 64px rgba(0,0,0,0.5);
+  }
+
+  .header {
+    background: linear-gradient(135deg, #3b1f6b 0%, #4c1d95 100%);
+    padding: 28px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .logo {
+    width: 48px; height: 48px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .header-text h1 { font-size: 18px; font-weight: 700; }
+  .header-text p  { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 2px; }
+
+  .body { padding: 28px 32px; }
+
+  .warning-banner {
+    background: #2d1f00;
+    border: 1px solid #92400e;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 12px;
+    color: #fbbf24;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    line-height: 1.5;
+  }
+  .warning-banner .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+  .field { margin-bottom: 20px; }
+  .field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #8b9dc8;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+  }
+  .field input {
+    width: 100%;
+    background: #141824;
+    border: 1.5px solid #2d3148;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 15px;
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .field input:focus { border-color: #7c3aed; }
+  .field input::placeholder { color: #3d4460; font-weight: 400; letter-spacing: 1px; }
+  .field .hint { font-size: 11px; color: #4a5280; margin-top: 6px; }
+
+  .date-display {
+    background: #141824;
+    border: 1.5px solid #2d3148;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-family: 'Courier New', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    color: #a78bfa;
+    letter-spacing: 2px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 15px;
+    background: #7c3aed;
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    letter-spacing: 0.5px;
+  }
+  .btn:hover  { background: #6d28d9; }
+  .btn:active { transform: scale(0.98); }
+
+  .result {
+    margin-top: 20px;
+    background: #141824;
+    border: 1.5px solid #2d3148;
+    border-radius: 14px;
+    overflow: hidden;
+    display: none;
+  }
+  .result.show { display: block; }
+
+  .result-header {
+    background: #1a0d2e;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .result-header span { font-size: 11px; color: #a78bfa; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; }
+
+  .copy-btn {
+    background: #2e1a5e;
+    border: 1px solid #5b21b6;
+    color: #a78bfa;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .copy-btn:hover { background: #5b21b6; }
+
+  .result-body { padding: 16px; }
+
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #1e2535;
+  }
+  .result-row:last-child { border-bottom: none; }
+  .result-row .rlabel { font-size: 11px; color: #6b7a9e; }
+  .result-row .rvalue {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 1.5px;
+  }
+  .rvalue.key-value { color: #a78bfa; font-size: 16px; }
+  .rvalue.expires   { color: #f59e0b; font-size: 12px; }
+
+  .error {
+    margin-top: 12px;
+    background: #2d1515;
+    border: 1px solid #7f1d1d;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #f87171;
+    display: none;
+  }
+  .error.show { display: block; }
+
+  .history { margin-top: 24px; }
+  .history h3 { font-size: 12px; color: #6b7a9e; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; }
+  .history-item {
+    background: #141824;
+    border: 1px solid #2d3148;
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+  }
+  .history-item .mid  { color: #8b9dc8; }
+  .history-item .hkey { color: #a78bfa; font-weight: 700; }
+  .history-item .hdate { color: #3d4460; font-size: 10px; }
+
+  .expired-badge {
+    font-size: 9px;
+    background: #2d1515;
+    border: 1px solid #7f1d1d;
+    color: #f87171;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    font-family: sans-serif;
+    letter-spacing: 0;
+    font-weight: 600;
+  }
+
+  .footer {
+    text-align: center;
+    margin-top: 24px;
+    font-size: 12px;
+    color: #3d4460;
+  }
+  .footer span { color: #7c3aed; }
+</style>
+</head>
+<body>
+
+<!-- Tab navigation -->
+<div class="tabs">
+  <a href="keygen.html" class="tab-link">🔐 License Keygen</a>
+  <a href="recovery-keygen.html" class="tab-link active">🔓 PIN Recovery</a>
+</div>
+
+<div class="card">
+  <div class="header">
+    <div class="logo">🔓</div>
+    <div class="header-text">
+      <h1>Admin PIN Recovery</h1>
+      <p>DreamLabs IT Solutions — Hotel POS System</p>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="warning-banner">
+      <span class="icon">⚠</span>
+      <span>This tool resets <strong>all admin PINs to 0000</strong>. The admin will be forced to set a new PIN on next login. Recovery codes expire at <strong>midnight UTC</strong> — generate a fresh code each day.</span>
+    </div>
+
+    <div class="field">
+      <label>Client Machine ID</label>
+      <input type="text" id="machineId" placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+        oninput="this.value = this.value.toUpperCase(); clearResult()" />
+      <p class="hint">Customer reads this from the "Admin forgot PIN?" screen in the app.</p>
+    </div>
+
+    <div class="field">
+      <label>Recovery Date (UTC — auto-filled)</label>
+      <div class="date-display" id="todayDisplay"></div>
+      <p class="hint">Code is only valid on this date. Generate a new code tomorrow if unused.</p>
+    </div>
+
+    <button class="btn" onclick="generate()">Generate Recovery Code</button>
+
+    <div class="error" id="error">Please enter the Machine ID shown on the customer's screen.</div>
+
+    <div class="result" id="result">
+      <div class="result-header">
+        <span>✓ Recovery Code Generated</span>
+        <button class="copy-btn" id="copyBtn" onclick="copyCode()">Copy Code</button>
+      </div>
+      <div class="result-body">
+        <div class="result-row">
+          <span class="rlabel">Machine ID</span>
+          <span class="rvalue" id="out-machine"></span>
+        </div>
+        <div class="result-row">
+          <span class="rlabel">Recovery Code</span>
+          <span class="rvalue key-value" id="out-code"></span>
+        </div>
+        <div class="result-row">
+          <span class="rlabel">Valid Until</span>
+          <span class="rvalue expires" id="out-expires"></span>
+        </div>
+        <div class="result-row">
+          <span class="rlabel">Effect</span>
+          <span class="rvalue" style="font-size:11px;color:#f59e0b">Resets ALL admin PINs → 0000</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="width:100%;max-width:520px;margin-top:16px" id="historyWrap" style="display:none">
+  <div class="history">
+    <h3>Recent Recovery Codes</h3>
+    <div id="historyList"></div>
+  </div>
+</div>
+
+<div class="footer">
+  Internal tool — <span>DreamLabs IT Solutions</span> — Do not share
+</div>
+
+<script>
+  // !! MUST match electron/pinRecovery.js RECOVERY_SECRET exactly !!
+  // Intentionally different from the license HMAC_SECRET
+  const RECOVERY_SECRET = 'DreamLabsITSolutions@2025#HotelPOS$AdminPINRecovery!9x';
+
+  const todayUTC = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  document.getElementById('todayDisplay').textContent = todayUTC;
+
+  async function hmacSHA256(secret, message) {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+    );
+    const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+    return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2,'0')).join('').toUpperCase();
+  }
+
+  async function generateRecoveryCode(machineId) {
+    const payload = `${machineId.trim().toUpperCase()}|${todayUTC}`;
+    const hmac = await hmacSHA256(RECOVERY_SECRET, payload);
+    return `${hmac.slice(0,4)}-${hmac.slice(4,8)}-${hmac.slice(8,12)}-${hmac.slice(12,16)}`;
+  }
+
+  function clearResult() {
+    document.getElementById('result').classList.remove('show');
+    document.getElementById('error').classList.remove('show');
+  }
+
+  async function generate() {
+    const mid = document.getElementById('machineId').value.trim().toUpperCase();
+    clearResult();
+
+    if (!mid) {
+      document.getElementById('error').classList.add('show');
+      return;
+    }
+
+    const code = await generateRecoveryCode(mid);
+
+    // Expiry: midnight UTC tonight
+    const tomorrow = new Date(todayUTC);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const expiresStr = tomorrow.toISOString().slice(0, 10) + ' 00:00 UTC';
+
+    document.getElementById('out-machine').textContent = mid;
+    document.getElementById('out-code').textContent    = code;
+    document.getElementById('out-expires').textContent = expiresStr;
+    document.getElementById('result').classList.add('show');
+
+    saveHistory(mid, code, todayUTC);
+    renderHistory();
+  }
+
+  function copyCode() {
+    const code = document.getElementById('out-code').textContent;
+    navigator.clipboard.writeText(code);
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => btn.textContent = 'Copy Code', 2000);
+  }
+
+  function saveHistory(mid, code, date) {
+    const h = JSON.parse(localStorage.getItem('recovery_history') || '[]');
+    h.unshift({ mid, code, date });
+    localStorage.setItem('recovery_history', JSON.stringify(h.slice(0, 20)));
+  }
+
+  function renderHistory() {
+    const h = JSON.parse(localStorage.getItem('recovery_history') || '[]');
+    const wrap = document.getElementById('historyWrap');
+    const list = document.getElementById('historyList');
+    if (h.length === 0) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    list.innerHTML = h.map(e => {
+      const expired = e.date !== todayUTC;
+      return `
+        <div class="history-item">
+          <div>
+            <div class="mid">${e.mid}${expired ? '<span class="expired-badge">EXPIRED</span>' : ''}</div>
+            <div class="hkey">${e.code}</div>
+            <div class="hdate">Generated: ${e.date}</div>
+          </div>
+          ${!expired ? `<button onclick="navigator.clipboard.writeText('${e.code}')" style="background:#1e2535;border:1px solid #2d3148;color:#8b9dc8;padding:4px 10px;border-radius:6px;font-size:10px;cursor:pointer;flex-shrink:0">Copy</button>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') generate(); });
+  renderHistory();
+</script>
+</body>
+</html>

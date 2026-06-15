@@ -3,7 +3,7 @@
 
 export const ROLE_PERMISSIONS = {
   admin: {
-    views: ['pos', 'orders', 'kitchen', 'reports', 'menu', 'tables', 'settings', 'shift'],
+    views: ['pos', 'orders', 'kitchen', 'reports', 'menu', 'tables', 'settings', 'shift', 'staff'],
     actions: ['checkout', 'void', 'discount', 'manageStaff', 'manageMenu', 'manageSettings', 'closeShift', 'openShift', 'clearOrders', 'exportData'],
   },
   cashier: {
