@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import dreamLabsLogo from '../../assets/DreamLabsLogoNew.png';
+import { canViewPage } from '../../utils/permissions';
 
 const NAV_ITEMS = [
     {
@@ -131,7 +132,10 @@ const WinControls = () => (
     </div>
 );
 
-const Layout = ({ children, currentView, onViewChange, hotelName = 'Hotel POS', kotCount = 0, hasOpenShift = false }) => {
+const ROLE_LABELS = { admin: 'Admin', cashier: 'Cashier', waiter: 'Waiter' };
+const ROLE_COLORS = { admin: 'text-red-400', cashier: 'text-blue-400', waiter: 'text-green-400' };
+
+const Layout = ({ children, currentView, onViewChange, hotelName = 'Hotel POS', kotCount = 0, hasOpenShift = false, currentUser = null, onLogout, userRole }) => {
     const [collapsed, setCollapsed] = useState(false);
     const [brandPopup, setBrandPopup] = useState(false);
     const closeTimer = useRef(null);
@@ -215,7 +219,7 @@ const Layout = ({ children, currentView, onViewChange, hotelName = 'Hotel POS', 
                             Navigation
                         </p>
                     )}
-                    {NAV_ITEMS.map(item => {
+                    {NAV_ITEMS.filter(item => !userRole || canViewPage(userRole, item.id)).map(item => {
                         const active = currentView === item.id;
                         return (
                             <button
@@ -273,6 +277,38 @@ const Layout = ({ children, currentView, onViewChange, hotelName = 'Hotel POS', 
 
                 {/* ── Bottom section ── */}
                 <div className="px-2 py-3 border-t border-gray-800/60 space-y-0.5">
+                    {/* Logged-in user + logout */}
+                    {currentUser && (
+                        <div className={`mb-2 ${collapsed ? 'flex justify-center' : 'mx-1 px-3 py-2 rounded-xl bg-gray-800/40 border border-gray-700/30'}`}>
+                            {!collapsed ? (
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <p className="text-white text-xs font-semibold truncate">{currentUser.name}</p>
+                                        <p className={`text-[10px] font-bold uppercase tracking-wider ${ROLE_COLORS[currentUser.role] || 'text-gray-400'}`}>
+                                            {ROLE_LABELS[currentUser.role] || currentUser.role}
+                                        </p>
+                                    </div>
+                                    <button onClick={onLogout} title="Log out"
+                                        className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-900/30 transition-colors">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                                            <polyline points="16 17 21 12 16 7"/>
+                                            <line x1="21" y1="12" x2="9" y2="12"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            ) : (
+                                <button onClick={onLogout} title={`Log out (${currentUser.name})`}
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-900/30 transition-colors">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                                        <polyline points="16 17 21 12 16 7"/>
+                                        <line x1="21" y1="12" x2="9" y2="12"/>
+                                    </svg>
+                                </button>
+                            )}
+                        </div>
+                    )}
                     {/* DreamLabs branding */}
                     {!collapsed ? (
                         <div className="mx-1 mt-2 relative" onMouseEnter={openPopup} onMouseLeave={closePopup} style={{paddingBottom: brandPopup ? '8px' : '0'}}>

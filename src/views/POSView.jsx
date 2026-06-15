@@ -14,6 +14,7 @@ import { applyTax } from '../utils/currency';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { loadItemShortcuts, loadAppShortcuts } from '../utils/itemShortcuts';
 import { printReceipt } from '../utils/printReceipt';
+import { can } from '../utils/permissions';
 
 function loadKotSettings() {
     try {
@@ -122,7 +123,8 @@ const POSView = () => {
     const tableOrders = useSelector(state => state.orders.tableOrders);
     tableOrdersRef.current = tableOrders;
     const { items: menuItems, categories } = useSelector(state => state.menu);
-    const currentShift = useSelector(state => state.shift.currentShift);
+    const currentShift  = useSelector(state => state.shift.currentShift);
+    const currentUser   = useSelector(state => state.auth.currentUser);
 
     // For takeaway mode use a fixed key; for dine-in use the selected table id
     const activeKey   = mode === 'takeaway' ? TAKEAWAY_ID : selectedTable?.id;
@@ -866,9 +868,10 @@ const POSView = () => {
                     onUpdateQuantity={handleUpdateQuantity}
                     onCancelOrder={handleCancelOrder}
                     onPrintKot={loadKotSettings().enabled ? handlePrintKot : undefined}
-                    onVoidItem={currentOrder.dbCreated ? handleVoidItem : undefined}
-                    onApplyDiscount={currentOrder.dbCreated ? handleApplyDiscount : undefined}
-                    onRemoveDiscount={currentOrder.discountAmount > 0 ? handleRemoveDiscount : undefined}
+                    onVoidItem={currentOrder.dbCreated && can(currentUser?.role, 'void') ? handleVoidItem : undefined}
+                    onApplyDiscount={currentOrder.dbCreated && can(currentUser?.role, 'discount') ? handleApplyDiscount : undefined}
+                    onRemoveDiscount={currentOrder.discountAmount > 0 && can(currentUser?.role, 'discount') ? handleRemoveDiscount : undefined}
+                    canCheckout={can(currentUser?.role, 'checkout')}
                     kotShortcut={(() => { const sc = loadAppShortcuts(); return sc['pos-kot'] || 'F8'; })()}
                 />
             </div>

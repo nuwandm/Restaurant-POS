@@ -3,6 +3,7 @@ import tableReducer from "./slices/tableSlice";
 import menuReducer from "./slices/menuSlice";
 import orderReducer from "./slices/orderSlice";
 import shiftReducer from "./slices/shiftSlice";
+import authReducer from "./slices/authSlice";
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     menu: menuReducer,
     orders: orderReducer,
     shift: shiftReducer,
+    auth: authReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

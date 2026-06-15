@@ -841,6 +841,49 @@ class DatabaseManager {
         return { totals, byDay, topItems, byMethod, byType, hourly };
       }
 
+      // ── Staff / Auth ──────────────────────────────────────────────────────
+      case "loginWithPin": {
+        const staff = this.db.prepare(
+          "SELECT id, name, role FROM staff WHERE pin=? AND is_active=1"
+        ).get(data.pin);
+        if (!staff) return { success: false, error: "Invalid PIN" };
+        this.db.prepare("UPDATE staff SET last_login=CURRENT_TIMESTAMP WHERE id=?").run(staff.id);
+        return { success: true, staff };
+      }
+
+      case "getStaff":
+        return this.db.prepare("SELECT id, name, role, pin, email, phone, is_active, created_at, last_login FROM staff ORDER BY name").all();
+
+      case "addStaff": {
+        const exists = this.db.prepare("SELECT id FROM staff WHERE pin=? AND is_active=1").get(data.pin);
+        if (exists) throw new Error("A staff member with this PIN already exists.");
+        const { lastInsertRowid } = this.db.prepare(
+          "INSERT INTO staff (name, role, pin, email, phone, is_active) VALUES (?,?,?,?,?,1)"
+        ).run(data.name, data.role, data.pin, data.email || null, data.phone || null);
+        return { success: true, id: lastInsertRowid };
+      }
+
+      case "updateStaff": {
+        if (data.pin) {
+          const conflict = this.db.prepare("SELECT id FROM staff WHERE pin=? AND is_active=1 AND id!=?").get(data.pin, data.id);
+          if (conflict) throw new Error("Another staff member already uses this PIN.");
+        }
+        this.db.prepare(
+          "UPDATE staff SET name=?, role=?, pin=?, email=?, phone=? WHERE id=?"
+        ).run(data.name, data.role, data.pin, data.email || null, data.phone || null, data.id);
+        return { success: true };
+      }
+
+      case "deleteStaff": {
+        const me = this.db.prepare("SELECT role FROM staff WHERE id=?").get(data.id);
+        if (me?.role === 'admin') {
+          const adminCount = this.db.prepare("SELECT COUNT(*) as n FROM staff WHERE role='admin' AND is_active=1").get();
+          if (adminCount.n <= 1) throw new Error("Cannot delete the last admin account.");
+        }
+        this.db.prepare("UPDATE staff SET is_active=0 WHERE id=?").run(data.id);
+        return { success: true };
+      }
+
       // ── Shift Management ──────────────────────────────────────────────────
       case "openShift": {
         const open = this.db.prepare("SELECT id FROM shifts WHERE status='open' LIMIT 1").get();

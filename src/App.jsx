@@ -34,12 +34,15 @@ import { fetchTables } from './store/slices/tableSlice';
 import { fetchMenuItems, fetchCategories } from './store/slices/menuSlice';
 import { fetchActiveOrders, loadPendingOrders } from './store/slices/orderSlice';
 import { loadOpenShift } from './store/slices/shiftSlice';
+import { logout } from './store/slices/authSlice';
 import { useSelector } from 'react-redux';
+import { canViewPage, getAllowedViews } from './utils/permissions';
 import Layout from './components/Layout/Layout';
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import LicenseGate from './components/LicenseGate';
 import ShortcutsHelp from './components/ShortcutsHelp';
 import ShiftOpenOverlay from './components/Shift/ShiftOpenOverlay';
+import PinLoginScreen from './components/Auth/PinLoginScreen';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { loadAppShortcuts } from './utils/itemShortcuts';
 import toast from 'react-hot-toast';
@@ -56,7 +59,16 @@ const ShiftView = lazy(() => import('./views/ShiftView'));
 function App() {
   const dispatch = useDispatch();
   const { currentShift, shiftLoaded } = useSelector(s => s.shift);
+  const { currentUser } = useSelector(s => s.auth);
   const [currentView, setCurrentView] = useState('pos');
+
+  // When user logs in, redirect to first allowed view if current one is blocked
+  useEffect(() => {
+    if (currentUser && !canViewPage(currentUser.role, currentView)) {
+      const allowed = getAllowedViews(currentUser.role);
+      setCurrentView(allowed[0] || 'pos');
+    }
+  }, [currentUser]);
   const [loading, setLoading] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
   const [kotCount, setKotCount] = useState(0);
@@ -66,16 +78,21 @@ function App() {
   });
 
   // Read shortcuts fresh from localStorage on every keydown so Settings changes take effect immediately
+  const navTo = (view) => {
+    if (!currentUser || !canViewPage(currentUser.role, view)) return;
+    setCurrentView(view);
+  };
+
   const navActions = useMemo(() => ({
     'help':         () => setShowHelp(v => !v),
-    'nav-pos':      () => setCurrentView('pos'),
-    'nav-orders':   () => setCurrentView('orders'),
-    'nav-reports':  () => setCurrentView('reports'),
-    'nav-menu':     () => setCurrentView('menu'),
-    'nav-tables':   () => setCurrentView('tables'),
-    'nav-settings': () => setCurrentView('settings'),
-    'nav-shift':    () => setCurrentView('shift'),
-  }), []);
+    'nav-pos':      () => navTo('pos'),
+    'nav-orders':   () => navTo('orders'),
+    'nav-reports':  () => navTo('reports'),
+    'nav-menu':     () => navTo('menu'),
+    'nav-tables':   () => navTo('tables'),
+    'nav-settings': () => navTo('settings'),
+    'nav-shift':    () => navTo('shift'),
+  }), [currentUser]);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -167,23 +184,38 @@ function App() {
     );
   }
 
+  const role = currentUser?.role;
+
   return (
     <ErrorBoundary>
       <LicenseGate>
-        <Layout currentView={currentView} onViewChange={setCurrentView} hotelName={hotelName} kotCount={kotCount} hasOpenShift={!!currentShift}>
+        {/* PIN login gate — shown when no user is logged in */}
+        {!currentUser && <PinLoginScreen />}
+
+        <Layout
+          currentView={currentView}
+          onViewChange={(v) => navTo(v)}
+          hotelName={hotelName}
+          kotCount={kotCount}
+          hasOpenShift={!!currentShift}
+          currentUser={currentUser}
+          onLogout={() => dispatch(logout())}
+          userRole={role}
+        >
           <Suspense fallback={<LoadingSpinner />}>
-            {currentView === 'pos' && <POSView />}
-            {currentView === 'orders' && <OrdersView />}
-            {currentView === 'kitchen' && <KitchenView onKotCountChange={setKotCount} />}
-            {currentView === 'reports' && <ReportsView />}
-            {currentView === 'menu' && <MenuManagementView />}
-            {currentView === 'tables' && <TableManagementView />}
-            {currentView === 'settings' && <SettingsView onHotelNameChange={setHotelName} />}
-            {currentView === 'shift' && <ShiftView />}
+            {currentView === 'pos'      && <POSView />}
+            {currentView === 'orders'   && canViewPage(role, 'orders')   && <OrdersView />}
+            {currentView === 'kitchen'  && canViewPage(role, 'kitchen')  && <KitchenView onKotCountChange={setKotCount} />}
+            {currentView === 'reports'  && canViewPage(role, 'reports')  && <ReportsView />}
+            {currentView === 'menu'     && canViewPage(role, 'menu')     && <MenuManagementView />}
+            {currentView === 'tables'   && canViewPage(role, 'tables')   && <TableManagementView />}
+            {currentView === 'settings' && canViewPage(role, 'settings') && <SettingsView onHotelNameChange={setHotelName} />}
+            {currentView === 'shift'    && canViewPage(role, 'shift')    && <ShiftView />}
           </Suspense>
         </Layout>
+
         {/* Block all actions when no shift is open (after initial load) */}
-        {shiftLoaded && !currentShift && <ShiftOpenOverlay />}
+        {currentUser && shiftLoaded && !currentShift && <ShiftOpenOverlay />}
         {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} />}
       </LicenseGate>
     </ErrorBoundary>

@@ -6,7 +6,7 @@ import DiscountModal from './DiscountModal';
 const OrderPanel = ({
     order, table, orderType = 'dine-in',
     onCheckout, onUpdateQuantity, onCancelOrder, onPrintKot, onVoidItem, onApplyDiscount, onRemoveDiscount,
-    kotShortcut,
+    kotShortcut, canCheckout = true,
 }) => {
     const [confirmCancel, setConfirmCancel] = useState(false);
     const [voidTarget, setVoidTarget]       = useState(null);
@@ -217,13 +217,19 @@ const OrderPanel = ({
                         )}
                     </button>
                 )}
-                <button
-                    onClick={onCheckout}
-                    disabled={activeItems.length === 0}
-                    className="w-full py-2.5 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl text-sm font-bold transition-colors"
-                >
-                    {activeItems.length === 0 ? 'No items' : `Checkout — ${lkr(finalTotal)}`}
-                </button>
+                {canCheckout ? (
+                    <button
+                        onClick={onCheckout}
+                        disabled={activeItems.length === 0}
+                        className="w-full py-2.5 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl text-sm font-bold transition-colors"
+                    >
+                        {activeItems.length === 0 ? 'No items' : `Checkout — ${lkr(finalTotal)}`}
+                    </button>
+                ) : (
+                    <div className="w-full py-2.5 bg-gray-800 border border-gray-700 text-gray-500 rounded-xl text-sm font-semibold text-center">
+                        Checkout — Cashier required
+                    </div>
+                )}
             </div>
 
             {/* Void reason modal */}
