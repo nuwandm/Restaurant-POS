@@ -140,6 +140,134 @@ const TABS = [
     },
 ];
 
+/* ── Discount Rules Panel ── */
+const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function DiscountRulesPanel() {
+    const [rules, setRules] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('discountRules') || '[]'); } catch { return []; }
+    });
+    const [adding, setAdding] = useState(false);
+    const [form, setForm] = useState({ name:'', pct:'', fromH:'00', fromM:'00', toH:'23', toM:'59', days:[0,1,2,3,4,5,6] });
+
+    const save = (updated) => {
+        setRules(updated);
+        localStorage.setItem('discountRules', JSON.stringify(updated));
+    };
+
+    const addRule = () => {
+        const pct = parseFloat(form.pct);
+        if (!form.name.trim() || isNaN(pct) || pct <= 0 || pct > 100) return;
+        save([...rules, { id: Date.now(), name: form.name.trim(), pct, fromH: parseInt(form.fromH), fromM: parseInt(form.fromM), toH: parseInt(form.toH), toM: parseInt(form.toM), days: form.days, active: true }]);
+        setAdding(false);
+        setForm({ name:'', pct:'', fromH:'00', fromM:'00', toH:'23', toM:'59', days:[0,1,2,3,4,5,6] });
+    };
+
+    const toggleDay = (d) => setForm(f => ({ ...f, days: f.days.includes(d) ? f.days.filter(x=>x!==d) : [...f.days, d] }));
+    const toggleRule = (id) => save(rules.map(r => r.id===id ? {...r, active:!r.active} : r));
+    const deleteRule = (id) => save(rules.filter(r => r.id!==id));
+
+    const pad = (n) => String(n).padStart(2,'0');
+    const timeLabel = (r) => `${pad(r.fromH)}:${pad(r.fromM)} – ${pad(r.toH)}:${pad(r.toM)}`;
+    const daysLabel = (r) => r.days.length===7 ? 'Every day' : r.days.map(d=>DAYS_SHORT[d]).join(', ');
+
+    return (
+        <div className="bg-gray-800 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+                <h3 className="text-white font-semibold text-sm flex items-center gap-2">
+                    <span className="w-1 h-4 bg-yellow-500 rounded-full inline-block" />
+                    Quick Discount Rules
+                </h3>
+                <button onClick={() => setAdding(a=>!a)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-bold rounded-lg transition-colors">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3.5 h-3.5"><path d="M12 5v14M5 12h14"/></svg>
+                    Add Rule
+                </button>
+            </div>
+
+            <p className="text-gray-500 text-xs">Auto-apply discounts at checkout during specific hours. Staff can still remove them manually.</p>
+
+            {/* Rule list */}
+            {rules.length === 0 && !adding && (
+                <p className="text-gray-600 text-xs py-2 text-center border border-dashed border-gray-700 rounded-xl">No rules yet. Add a happy hour or time-based discount.</p>
+            )}
+            <div className="space-y-2">
+                {rules.map(r => (
+                    <div key={r.id} className={`flex items-center gap-3 rounded-xl px-3 py-3 border transition-all ${r.active ? 'bg-yellow-950/20 border-yellow-800/30' : 'bg-gray-800/40 border-gray-700/30 opacity-60'}`}>
+                        <button onClick={() => toggleRule(r.id)}
+                            className={`w-9 h-5 rounded-full transition-all shrink-0 relative ${r.active ? 'bg-yellow-500' : 'bg-gray-700'}`}>
+                            <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${r.active ? 'right-0.5' : 'left-0.5'}`}/>
+                        </button>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-gray-200 text-sm font-semibold">{r.name} <span className="text-yellow-400 font-black">{r.pct}%</span></p>
+                            <p className="text-gray-500 text-[10px]">{timeLabel(r)} · {daysLabel(r)}</p>
+                        </div>
+                        <button onClick={() => deleteRule(r.id)} className="text-gray-700 hover:text-red-400 transition-colors shrink-0">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>
+                        </button>
+                    </div>
+                ))}
+            </div>
+
+            {/* Add form */}
+            {adding && (
+                <div className="bg-gray-900/60 rounded-xl p-4 space-y-3 border border-gray-700/50">
+                    <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">New Discount Rule</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider block mb-1">Rule Name</label>
+                            <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Happy Hour"
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-yellow-500 transition-colors"/>
+                        </div>
+                        <div>
+                            <label className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider block mb-1">Discount %</label>
+                            <input type="number" value={form.pct} onChange={e=>setForm(f=>({...f,pct:e.target.value}))} placeholder="10" min={1} max={100}
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-yellow-500 transition-colors"/>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider block mb-1">From</label>
+                            <div className="flex items-center gap-1">
+                                <input type="number" value={form.fromH} onChange={e=>setForm(f=>({...f,fromH:e.target.value.padStart(2,'0')}))} min={0} max={23} placeholder="00"
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-yellow-500"/>
+                                <span className="text-gray-600 font-bold">:</span>
+                                <input type="number" value={form.fromM} onChange={e=>setForm(f=>({...f,fromM:e.target.value.padStart(2,'0')}))} min={0} max={59} placeholder="00"
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-yellow-500"/>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider block mb-1">To</label>
+                            <div className="flex items-center gap-1">
+                                <input type="number" value={form.toH} onChange={e=>setForm(f=>({...f,toH:e.target.value.padStart(2,'0')}))} min={0} max={23} placeholder="23"
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-yellow-500"/>
+                                <span className="text-gray-600 font-bold">:</span>
+                                <input type="number" value={form.toM} onChange={e=>setForm(f=>({...f,toM:e.target.value.padStart(2,'0')}))} min={0} max={59} placeholder="59"
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-yellow-500"/>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider block mb-1.5">Days</label>
+                        <div className="flex gap-1.5">
+                            {DAYS_SHORT.map((d,i) => (
+                                <button key={i} onClick={() => toggleDay(i)}
+                                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${form.days.includes(i) ? 'bg-yellow-600 text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'}`}>
+                                    {d[0]}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                        <button onClick={() => setAdding(false)} className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 font-semibold rounded-lg text-sm transition-colors">Cancel</button>
+                        <button onClick={addRule} className="flex-[2] py-2 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg text-sm transition-colors">Save Rule</button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 const SettingsView = ({ onHotelNameChange }) => {
     const [activeTab, setActiveTab] = useState('hotel');
     const [settings, setSettings] = useState(() => {
@@ -259,10 +387,11 @@ const SettingsView = ({ onHotelNameChange }) => {
                 const fullBackup = {
                     ...res.data,
                     settings,
-                    itemShortcuts: loadItemShortcuts(),
-                    appShortcuts:  loadAppShortcuts(),
-                    posZones: JSON.parse(localStorage.getItem('posZones') || '[]'),
-                    backupVersion: '2.0',
+                    itemShortcuts:  loadItemShortcuts(),
+                    appShortcuts:   loadAppShortcuts(),
+                    posZones:       JSON.parse(localStorage.getItem('posZones')       || '[]'),
+                    discountRules:  JSON.parse(localStorage.getItem('discountRules')  || '[]'),
+                    backupVersion: '3.1',
                     exportedAt: new Date().toISOString(),
                     exportedBy: settings.hotelName || 'Hotel POS',
                 };
@@ -309,6 +438,9 @@ const SettingsView = ({ onHotelNameChange }) => {
                     }
                     if (backupData.posZones && Array.isArray(backupData.posZones)) {
                         localStorage.setItem('posZones', JSON.stringify(backupData.posZones));
+                    }
+                    if (backupData.discountRules && Array.isArray(backupData.discountRules)) {
+                        localStorage.setItem('discountRules', JSON.stringify(backupData.discountRules));
                     }
                     toast.success('Backup imported — please refresh the page');
                 } else {
@@ -462,6 +594,9 @@ const SettingsView = ({ onHotelNameChange }) => {
                                 <p className="text-blue-300 text-xs font-medium mb-1">How tax works</p>
                                 <p className="text-blue-400/70 text-xs">Tax is calculated on the subtotal of every order. Set to 0 to disable tax completely. Changes take effect after clicking Save Changes.</p>
                             </div>
+
+                            {/* ── Quick Discount Rules ── */}
+                            <DiscountRulesPanel />
                         </div>
                     )}
 
@@ -551,9 +686,10 @@ const SettingsView = ({ onHotelNameChange }) => {
                                     {[
                                         'Menu items & categories','Tables & layout',
                                         'Staff & PINs','All orders & items',
-                                        'Payments & transactions','Shift history',
+                                        'Payments & transactions','Shift history (with staff names)',
                                         'KOT history & void log','Order & KOT counters',
                                         'Settings & shortcuts','POS zones',
+                                        'Quick discount rules','Keyboard shortcuts',
                                     ].map(item => (
                                         <div key={item} className="flex items-center gap-1.5 text-xs text-gray-500">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" className="w-3 h-3 shrink-0"><path d="M20 6L9 17l-5-5"/></svg>
@@ -561,6 +697,7 @@ const SettingsView = ({ onHotelNameChange }) => {
                                         </div>
                                     ))}
                                 </div>
+                                <p className="text-gray-600 text-[10px]">Backup v3.1</p>
                                 <button
                                     onClick={handleExportBackup}
                                     disabled={!!backupStatus}

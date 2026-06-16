@@ -119,6 +119,34 @@ const POSView = () => {
     const tableOrdersRef = useRef({});
     const takeawayKotTimerRef = useRef(null);
 
+    const [dashStats, setDashStats] = useState(null);
+    const loadDashStats = useCallback(async () => {
+        try {
+            const res = await window.electron.database({ action: 'getDashboardStats' });
+            if (res.success) setDashStats(res.data);
+        } catch { /* silent */ }
+    }, []);
+    useEffect(() => {
+        loadDashStats();
+        const id = setInterval(loadDashStats, 60000);
+        return () => clearInterval(id);
+    }, [loadDashStats]);
+
+    const [reservedTableIds, setReservedTableIds] = useState(new Set());
+    const loadTodayReservations = useCallback(async () => {
+        try {
+            const res = await window.electron.database({ action: 'getTodayReservations' });
+            if (res.success && Array.isArray(res.data)) {
+                setReservedTableIds(new Set(res.data.map(r => r.table_id).filter(Boolean)));
+            }
+        } catch { /* silent */ }
+    }, []);
+    useEffect(() => {
+        loadTodayReservations();
+        const id = setInterval(loadTodayReservations, 60000);
+        return () => clearInterval(id);
+    }, [loadTodayReservations]);
+
     const { selectedTable, tables } = useSelector(state => state.tables);
     const tableOrders = useSelector(state => state.orders.tableOrders);
     tableOrdersRef.current = tableOrders;
@@ -401,10 +429,39 @@ const POSView = () => {
     }, [currentOrder.orderId, selectedTable, mode, dispatch]);
 
     /* ── Checkout / payment ───────────────────────────── */
-    const handleCheckout = useCallback(() => {
+    const handleCheckout = useCallback(async () => {
         if (currentOrder.items.length === 0) { toast.error('No items in order'); return; }
+
+        // Auto-apply active discount rules if no discount already set
+        if (!currentOrder.discountAmount && currentOrder.orderId) {
+            try {
+                const rules = JSON.parse(localStorage.getItem('discountRules') || '[]');
+                const now = new Date();
+                const h = now.getHours(), m = now.getMinutes(), day = now.getDay();
+                const active = rules.find(r => {
+                    if (!r.active) return false;
+                    if (!r.days.includes(day)) return false;
+                    const nowMin = h * 60 + m;
+                    const fromMin = r.fromH * 60 + r.fromM;
+                    const toMin   = r.toH   * 60 + r.toM;
+                    return nowMin >= fromMin && nowMin <= toMin;
+                });
+                if (active) {
+                    const subtotal = currentOrder.subtotal || 0;
+                    const discountAmount = parseFloat((subtotal * active.pct / 100).toFixed(2));
+                    await window.electron.database({
+                        action: 'applyDiscount',
+                        data: { orderId: currentOrder.orderId, discountAmount, discountType: 'percent', discountReason: active.name },
+                    });
+                    const key = mode === 'takeaway' ? TAKEAWAY_ID : selectedTable?.id;
+                    if (key) dispatch(setDiscount({ tableId: key, discountAmount, discountType: 'percent', discountReason: active.name }));
+                    toast(`"${active.name}" discount applied — ${active.pct}% off`, { icon: '🏷️', duration: 2500 });
+                }
+            } catch { /* silent — don't block checkout */ }
+        }
+
         setShowPayment(true);
-    }, [currentOrder]);
+    }, [currentOrder, mode, selectedTable, dispatch]);
 
     const handlePaymentComplete = useCallback(async (paymentData) => {
         try {
@@ -729,6 +786,7 @@ const POSView = () => {
                             tables={tables}
                             onTableSelect={handleTableSelect}
                             selectedTable={selectedTable}
+                            reservedTableIds={reservedTableIds}
                         />
                     </div>
                 )}
@@ -736,6 +794,40 @@ const POSView = () => {
 
             {/* ── Center: menu ── */}
             <div className="flex-1 flex flex-col overflow-hidden">
+
+                {/* ── Dashboard stats bar ── */}
+                {dashStats && (
+                    <div className="shrink-0 flex items-center gap-0 border-b border-gray-700/60 bg-gray-850 divide-x divide-gray-700/60" style={{background:'#111827'}}>
+                        {[
+                            { label: "Today's Revenue", value: `Rs. ${Number(dashStats.revenue||0).toLocaleString('en-LK',{minimumFractionDigits:2,maximumFractionDigits:2})}`, color: 'text-green-400', icon: (
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                            )},
+                            { label: 'Orders', value: dashStats.orderCount, color: 'text-blue-400', icon: (
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                            )},
+                            { label: 'Avg Order', value: `Rs. ${Number(dashStats.avgOrder||0).toLocaleString('en-LK',{minimumFractionDigits:2,maximumFractionDigits:2})}`, color: 'text-purple-400', icon: (
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                            )},
+                            { label: 'Tables', value: `${dashStats.tables.occupied} / ${dashStats.tables.total} busy`, color: dashStats.tables.occupied > 0 ? 'text-orange-400' : 'text-gray-500', icon: (
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><rect x="3" y="7" width="18" height="3" rx="1"/><path d="M5 10v7M19 10v7"/></svg>
+                            )},
+                        ].map(stat => (
+                            <div key={stat.label} className="flex items-center gap-2 px-4 py-2 flex-1">
+                                <span className="text-gray-600 shrink-0">{stat.icon}</span>
+                                <div className="min-w-0">
+                                    <p className="text-gray-600 text-[9px] font-semibold uppercase tracking-wider leading-none">{stat.label}</p>
+                                    <p className={`text-sm font-bold leading-tight mt-0.5 ${stat.color}`}>{stat.value}</p>
+                                </div>
+                            </div>
+                        ))}
+                        <button onClick={loadDashStats} className="px-3 shrink-0 text-gray-700 hover:text-gray-400 transition-colors" title="Refresh stats">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+                                <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                            </svg>
+                        </button>
+                    </div>
+                )}
+
                 {/* Category tabs + Search */}
                 <div className="bg-gray-800 px-3 pt-2 pb-2 border-b border-gray-700/60 shrink-0 space-y-2">
                     {/* Search bar */}

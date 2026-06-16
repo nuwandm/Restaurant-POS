@@ -86,8 +86,8 @@ export default function DiscountModal({ order, onConfirm, onCancel }) {
                 <label className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1.5 block">
                   Discount {discountType === 'percent' ? 'Percentage' : 'Amount'}
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-semibold">
+                <div className="relative flex items-center bg-gray-800 border border-gray-600 rounded-xl focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/40 transition-colors overflow-hidden">
+                  <span className="pl-3.5 text-gray-400 text-sm font-semibold shrink-0">
                     {discountType === 'percent' ? '%' : 'Rs.'}
                   </span>
                   <input
@@ -99,9 +99,21 @@ export default function DiscountModal({ order, onConfirm, onCancel }) {
                     value={discountValue}
                     onChange={e => setDiscountValue(e.target.value)}
                     autoFocus
-                    className="w-full bg-gray-800 border border-gray-600 rounded-xl pl-10 pr-4 py-3 text-white text-lg font-semibold
-                      focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 transition-colors"
+                    className="flex-1 bg-transparent pl-2 pr-2 py-3 text-white text-lg font-semibold focus:outline-none
+                      [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   />
+                  <div className="flex flex-col border-l border-gray-700 shrink-0">
+                    <button type="button"
+                      onMouseDown={e => { e.preventDefault(); setDiscountValue(v => { const n = Math.min(discountType==='percent'?100:999999, (parseFloat(v)||0)+1); return String(n); }); }}
+                      className="px-2.5 py-1.5 text-gray-400 hover:text-white hover:bg-gray-700 border-b border-gray-700 transition-colors">
+                      <svg viewBox="0 0 10 6" fill="none" className="w-2.5 h-2.5"><path d="M1 5L5 1L9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
+                    <button type="button"
+                      onMouseDown={e => { e.preventDefault(); setDiscountValue(v => { const n = Math.max(0, (parseFloat(v)||0)-1); return String(n); }); }}
+                      className="px-2.5 py-1.5 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">
+                      <svg viewBox="0 0 10 6" fill="none" className="w-2.5 h-2.5"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
+                  </div>
                 </div>
                 {discountNum > 0 && (
                   <p className="text-xs text-green-400 mt-1 font-semibold">

@@ -58,6 +58,7 @@ const KitchenView = lazy(() => import('./views/KitchenView'));
 const ShiftView = lazy(() => import('./views/ShiftView'));
 const StaffView = lazy(() => import('./views/StaffView'));
 const EODReportView = lazy(() => import('./views/EODReportView'));
+const ReservationsView = lazy(() => import('./views/ReservationsView'));
 
 function App() {
   const dispatch = useDispatch();
@@ -221,6 +222,7 @@ function App() {
             {currentView === 'shift'    && canViewPage(role, 'shift')    && <ShiftView />}
             {currentView === 'staff'    && canViewPage(role, 'staff')    && <StaffView />}
             {currentView === 'eod'      && canViewPage(role, 'eod')      && <EODReportView />}
+            {currentView === 'reservations' && canViewPage(role, 'reservations') && <ReservationsView />}
           </Suspense>
         </Layout>
 

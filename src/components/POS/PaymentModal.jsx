@@ -52,7 +52,221 @@ const METHOD_COLORS = {
     purple:  { active: 'bg-purple-600 border-purple-500 shadow-purple-900/40',   dot: 'bg-purple-300',  text: 'text-purple-200',  icon: 'text-white' },
 };
 
+/* ── Split Bill Sub-component ── */
+function SplitBill({ order, onComplete, onCancel }) {
+    const { total: orderTotal } = applyTax(order.subtotal ?? 0);
+    const [mode, setMode] = useState('equal'); // 'equal' | 'byitem'
+    const [guests, setGuests] = useState(2);
+    const [paidCount, setPaidCount] = useState(0);
+    const [payingGuest, setPayingGuest] = useState(null); // which guest is paying now
+    const [itemAssign, setItemAssign] = useState({}); // itemId -> guestIndex (1-based)
+    const [guestMethod, setGuestMethod] = useState('cash');
+    const [guestAmountStr, setGuestAmountStr] = useState('');
+    const guestInputRef = useRef(null);
+
+    const activeItems = order.items.filter(i => !i.voided);
+
+    // Equal split: each guest pays orderTotal / guests
+    const equalShare = useMemo(() => orderTotal / guests, [orderTotal, guests]);
+
+    // By-item split: sum items assigned to each guest
+    const guestTotals = useMemo(() => {
+        if (mode !== 'byitem') return {};
+        const totals = {};
+        for (let g = 1; g <= guests; g++) totals[g] = 0;
+        totals['unassigned'] = 0;
+        activeItems.forEach(item => {
+            const g = itemAssign[item.id || item.orderItemId];
+            const amt = item.price * item.quantity;
+            if (g && totals[g] !== undefined) totals[g] += amt;
+            else totals['unassigned'] += amt;
+        });
+        return totals;
+    }, [mode, itemAssign, activeItems, guests]);
+
+    const currentGuestTotal = useMemo(() => {
+        if (!payingGuest) return 0;
+        if (mode === 'equal') return equalShare;
+        return guestTotals[payingGuest] || 0;
+    }, [payingGuest, mode, equalShare, guestTotals]);
+
+    const guestAmount = parseFloat(guestAmountStr.replace(/,/g, '')) || 0;
+    const guestChange = guestAmount - currentGuestTotal;
+    const guestValid  = guestMethod !== 'cash' || guestAmount >= currentGuestTotal;
+
+    const fmtLkr = (n) => `Rs. ${Number(n||0).toLocaleString('en-LK',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    const fmtAmt = (raw) => {
+        if (!raw) return '';
+        const [int, dec] = raw.replace(/,/g,'').split('.');
+        return (dec !== undefined ? `${int.replace(/\B(?=(\d{3})+(?!\d))/g,',')}.${dec}` : int.replace(/\B(?=(\d{3})+(?!\d))/g,','));
+    };
+
+    const allPaid = paidCount >= guests;
+    const remaining = guests - paidCount;
+
+    const startPayGuest = (g) => {
+        setPayingGuest(g);
+        setGuestAmountStr('');
+        setGuestMethod('cash');
+        setTimeout(() => guestInputRef.current?.focus(), 60);
+    };
+
+    const completeGuestPayment = () => {
+        if (!guestValid || !payingGuest) return;
+        const newPaid = paidCount + 1;
+        setPaidCount(newPaid);
+        setPayingGuest(null);
+        if (newPaid >= guests) {
+            // All guests paid — close the order
+            onComplete({ method: 'cash', amount: orderTotal, change: 0, splitBill: true });
+        }
+    };
+
+    const GUEST_COLORS = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#f97316','#06b6d4','#ec4899','#84cc16'];
+
+    return (
+        <div className="space-y-4">
+            {/* Mode toggle */}
+            <div className="flex bg-gray-800/60 rounded-xl p-1 gap-1">
+                {[{id:'equal',label:'Equal Split'},{id:'byitem',label:'By Item'}].map(m => (
+                    <button key={m.id} onClick={() => { setMode(m.id); setItemAssign({}); }}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mode===m.id ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}>
+                        {m.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Guest count */}
+            <div className="flex items-center justify-between bg-gray-800/40 rounded-xl px-4 py-3">
+                <span className="text-gray-400 text-sm font-medium">Number of Guests</span>
+                <div className="flex items-center gap-3">
+                    <button onClick={() => setGuests(g => Math.max(2, g-1))}
+                        className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-bold flex items-center justify-center transition-colors">−</button>
+                    <span className="text-white font-black text-lg w-6 text-center">{guests}</span>
+                    <button onClick={() => setGuests(g => Math.min(8, g+1))}
+                        className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-bold flex items-center justify-center transition-colors">+</button>
+                </div>
+            </div>
+
+            {/* By-item assignment */}
+            {mode === 'byitem' && (
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    <p className="text-gray-600 text-[10px] uppercase tracking-wider font-bold">Assign items to guests</p>
+                    {activeItems.map(item => {
+                        const key = item.id || item.orderItemId;
+                        const assigned = itemAssign[key];
+                        return (
+                            <div key={key} className="flex items-center gap-2 bg-gray-800/40 rounded-xl px-3 py-2">
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-gray-200 text-xs font-medium truncate">{item.name}</p>
+                                    <p className="text-gray-600 text-[10px]">{item.quantity}× · {fmtLkr(item.price * item.quantity)}</p>
+                                </div>
+                                <div className="flex gap-1">
+                                    {Array.from({length: guests}, (_,i) => i+1).map(g => (
+                                        <button key={g} onClick={() => setItemAssign(a => ({...a, [key]: assigned===g ? undefined : g}))}
+                                            className={`w-6 h-6 rounded-full text-[10px] font-black transition-all ${assigned===g ? 'text-white' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'}`}
+                                            style={assigned===g ? {background: GUEST_COLORS[(g-1)%GUEST_COLORS.length]} : {}}>
+                                            {g}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {guestTotals['unassigned'] > 0 && (
+                        <p className="text-yellow-500 text-[10px] px-1">⚠ {fmtLkr(guestTotals['unassigned'])} unassigned</p>
+                    )}
+                </div>
+            )}
+
+            {/* Guest payment list */}
+            {!payingGuest && (
+                <div className="space-y-1.5">
+                    <p className="text-gray-600 text-[10px] uppercase tracking-wider font-bold">Guest Payments</p>
+                    {Array.from({length: guests}, (_,i) => i+1).map(g => {
+                        const paid = g <= paidCount;
+                        const amount = mode === 'equal' ? equalShare : (guestTotals[g] || 0);
+                        return (
+                            <div key={g} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border transition-all ${paid ? 'bg-green-950/30 border-green-800/30' : 'bg-gray-800/40 border-gray-700/40'}`}>
+                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0"
+                                    style={{background: GUEST_COLORS[(g-1)%GUEST_COLORS.length]}}>
+                                    {g}
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-gray-300 text-xs font-semibold">Guest {g}</p>
+                                    <p className="text-gray-500 text-[10px]">{fmtLkr(amount)}</p>
+                                </div>
+                                {paid ? (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" className="w-5 h-5 shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
+                                ) : (
+                                    <button onClick={() => startPayGuest(g)}
+                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors shrink-0">
+                                        Pay
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Active guest payment */}
+            {payingGuest && (
+                <div className="space-y-3 bg-gray-800/40 rounded-xl p-4">
+                    <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white"
+                            style={{background: GUEST_COLORS[(payingGuest-1)%GUEST_COLORS.length]}}>
+                            {payingGuest}
+                        </div>
+                        <p className="text-white font-bold text-sm">Guest {payingGuest} · {fmtLkr(currentGuestTotal)}</p>
+                    </div>
+                    {/* Method pills */}
+                    <div className="grid grid-cols-3 gap-1.5">
+                        {['cash','card','mobile'].map(m => (
+                            <button key={m} onClick={() => { setGuestMethod(m); setGuestAmountStr(''); }}
+                                className={`py-2 rounded-xl text-xs font-bold border transition-all capitalize ${guestMethod===m ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-700 border-gray-600 text-gray-400 hover:text-white'}`}>
+                                {m}
+                            </button>
+                        ))}
+                    </div>
+                    {guestMethod === 'cash' && (
+                        <div className="flex items-center bg-gray-900 border-2 border-gray-700 focus-within:border-blue-500 rounded-xl overflow-hidden transition-colors">
+                            <span className="px-3 text-gray-500 text-sm font-semibold shrink-0">Rs.</span>
+                            <input ref={guestInputRef} type="text" inputMode="decimal" value={guestAmountStr} placeholder="0.00"
+                                onChange={e => { const r=e.target.value.replace(/,/g,''); if(r===''||/^\d*\.?\d*$/.test(r)) setGuestAmountStr(fmtAmt(r)); }}
+                                onKeyDown={e => { if(e.key==='Enter') completeGuestPayment(); }}
+                                className="flex-1 bg-transparent py-3 text-white text-2xl font-black text-right focus:outline-none tabular-nums placeholder:text-gray-700 min-w-0 pr-3"
+                                autoFocus />
+                        </div>
+                    )}
+                    {guestMethod === 'cash' && guestAmount > 0 && (
+                        <div className={`rounded-xl p-3 flex items-center justify-between ${guestValid ? 'bg-green-950/40 border border-green-800/30' : 'bg-red-950/40 border border-red-800/30'}`}>
+                            <p className={`text-sm font-bold ${guestValid ? 'text-green-400' : 'text-red-400'}`}>
+                                {guestValid ? `Change: ${fmtLkr(guestChange)}` : `Short: ${fmtLkr(currentGuestTotal - guestAmount)}`}
+                            </p>
+                        </div>
+                    )}
+                    <div className="flex gap-2">
+                        <button onClick={() => setPayingGuest(null)} className="flex-1 py-2.5 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-xl text-sm transition-colors">Back</button>
+                        <button onClick={completeGuestPayment} disabled={!guestValid}
+                            className={`flex-[2] py-2.5 font-bold rounded-xl text-sm transition-all ${guestValid ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-gray-700 text-gray-600 cursor-not-allowed'}`}>
+                            {guestMethod === 'cash' ? `Confirm · Change ${fmtLkr(Math.max(0,guestChange))}` : 'Confirm Payment'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Footer */}
+            <div className="flex items-center justify-between text-xs pt-1">
+                <span className="text-gray-600">{paidCount} of {guests} paid · {fmtLkr(orderTotal)} total</span>
+                <button onClick={onCancel} className="text-gray-600 hover:text-gray-400 transition-colors">Cancel</button>
+            </div>
+        </div>
+    );
+}
+
 const PaymentModal = ({ order, orderType = 'dine-in', onComplete, onCancel }) => {
+    const [tab, setTab] = useState('pay'); // 'pay' | 'split'
     const [paymentMethod, setPaymentMethod] = useState('cash');
     const [amountStr, setAmountStr] = useState(''); // raw numeric string, no commas
     const [focused, setFocused] = useState(false);
@@ -127,7 +341,7 @@ const PaymentModal = ({ order, orderType = 'dine-in', onComplete, onCancel }) =>
                 <div className="h-1 w-full bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-500" />
 
                 {/* ── Header ── */}
-                <div className="px-6 pt-5 pb-4 flex items-center justify-between">
+                <div className="px-6 pt-5 pb-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
                             <svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2" className="w-5 h-5">
@@ -156,7 +370,21 @@ const PaymentModal = ({ order, orderType = 'dine-in', onComplete, onCancel }) =>
                     </button>
                 </div>
 
+                {/* ── Tab bar ── */}
+                <div className="px-6 pb-3 flex gap-1">
+                    {[{id:'pay',label:'Pay Full'},{id:'split',label:'Split Bill'}].map(t => (
+                        <button key={t.id} onClick={() => setTab(t.id)}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${tab===t.id ? 'bg-white/10 text-white' : 'text-gray-600 hover:text-gray-400'}`}>
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+
                 <div className="px-6 pb-6 space-y-4">
+                {tab === 'split' && (
+                    <SplitBill order={order} onComplete={onComplete} onCancel={onCancel} />
+                )}
+                {tab === 'pay' && (<>
 
                     {/* ── Total Due ── */}
                     <div className="rounded-2xl bg-gradient-to-br from-gray-800/80 to-gray-800/40 border border-white/[0.05] p-4">
@@ -364,6 +592,7 @@ const PaymentModal = ({ order, orderType = 'dine-in', onComplete, onCancel }) =>
                             )}
                         </button>
                     </div>
+                </>)}
                 </div>
             </div>
         </div>

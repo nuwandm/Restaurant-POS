@@ -250,6 +250,23 @@ class DatabaseManager {
         printed_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // ── reservations table ──
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS reservations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_name TEXT NOT NULL,
+        phone TEXT,
+        party_size INTEGER NOT NULL DEFAULT 1,
+        table_id INTEGER,
+        reservation_date TEXT NOT NULL,
+        reservation_time TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
   }
 
   createIndexes() {
@@ -559,6 +576,67 @@ class DatabaseManager {
         ).run(data.tableId);
         return { success: true };
 
+      // ── Reservations ──────────────────────────────────────────────────────
+      case "createReservation": {
+        const { lastInsertRowid } = this.db.prepare(`
+          INSERT INTO reservations (customer_name, phone, party_size, table_id, reservation_date, reservation_time, status, notes)
+          VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+        `).run(data.customer_name, data.phone || null, data.party_size || 1, data.table_id || null,
+               data.reservation_date, data.reservation_time, data.notes || null);
+        return { success: true, id: lastInsertRowid };
+      }
+
+      case "getReservations": {
+        const date = data?.date || new Date().toLocaleDateString('en-CA');
+        return this.db.prepare(`
+          SELECT r.*, t.number as table_number
+          FROM reservations r
+          LEFT JOIN tables t ON r.table_id = t.id
+          WHERE r.reservation_date = ?
+          ORDER BY r.reservation_time ASC
+        `).all(date);
+      }
+
+      case "getAllReservations": {
+        return this.db.prepare(`
+          SELECT r.*, t.number as table_number
+          FROM reservations r
+          LEFT JOIN tables t ON r.table_id = t.id
+          ORDER BY r.reservation_date DESC, r.reservation_time ASC
+          LIMIT 200
+        `).all();
+      }
+
+      case "updateReservation": {
+        this.db.prepare(`
+          UPDATE reservations SET customer_name=?, phone=?, party_size=?, table_id=?,
+            reservation_date=?, reservation_time=?, status=?, notes=?,
+            updated_at=CURRENT_TIMESTAMP
+          WHERE id=?
+        `).run(data.customer_name, data.phone || null, data.party_size || 1, data.table_id || null,
+               data.reservation_date, data.reservation_time, data.status || 'pending',
+               data.notes || null, data.id);
+        return { success: true };
+      }
+
+      case "cancelReservation": {
+        this.db.prepare(
+          "UPDATE reservations SET status='cancelled', updated_at=CURRENT_TIMESTAMP WHERE id=?"
+        ).run(data.id);
+        return { success: true };
+      }
+
+      case "getTodayReservations": {
+        const today = new Date().toLocaleDateString('en-CA');
+        return this.db.prepare(`
+          SELECT r.*, t.number as table_number
+          FROM reservations r
+          LEFT JOIN tables t ON r.table_id = t.id
+          WHERE r.reservation_date = ? AND r.status IN ('pending','confirmed')
+          ORDER BY r.reservation_time ASC
+        `).all(today);
+      }
+
       case "exportBackup": {
         const categories    = this.db.prepare("SELECT * FROM categories").all();
         const menuItems     = this.db.prepare("SELECT * FROM menu_items").all();
@@ -573,12 +651,14 @@ class DatabaseManager {
         const kotSnapshots  = this.db.prepare("SELECT * FROM kot_snapshots").all();
         const kotCounters   = this.db.prepare("SELECT * FROM kot_counters").all();
         const orderCounters = this.db.prepare("SELECT * FROM order_counters").all();
+        const reservations  = this.db.prepare("SELECT * FROM reservations").all();
         return {
           categories, menuItems, tables, staff,
           orders, orderItems, transactions,
           shifts, voidKots, kotItems, kotSnapshots, kotCounters, orderCounters,
+          reservations,
           exportedAt: new Date().toISOString(),
-          backupVersion: '3.0',
+          backupVersion: '3.2',
         };
       }
 
@@ -619,8 +699,8 @@ class DatabaseManager {
               for (const r of data.staff) s.run(r.id,r.name,r.role,r.pin,r.email,r.phone,r.is_active,r.created_at,r.last_login,r.pin_reset_required??0);
             }
             if (data.shifts) {
-              const s = this.db.prepare("INSERT OR REPLACE INTO shifts (id,opening_float,closing_cash_count,expected_cash,cash_difference,total_cash_sales,total_card_sales,total_mobile_sales,total_discounts,order_count,status,opened_at,closed_at,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-              for (const r of data.shifts) s.run(r.id,r.opening_float,r.closing_cash_count,r.expected_cash,r.cash_difference,r.total_cash_sales,r.total_card_sales,r.total_mobile_sales,r.total_discounts,r.order_count,r.status,r.opened_at,r.closed_at,r.notes);
+              const s = this.db.prepare("INSERT OR REPLACE INTO shifts (id,opening_float,closing_cash_count,expected_cash,cash_difference,total_cash_sales,total_card_sales,total_mobile_sales,total_discounts,order_count,status,opened_at,closed_at,notes,opened_by_id,opened_by_name,closed_by_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+              for (const r of data.shifts) s.run(r.id,r.opening_float,r.closing_cash_count,r.expected_cash,r.cash_difference,r.total_cash_sales,r.total_card_sales,r.total_mobile_sales,r.total_discounts,r.order_count,r.status,r.opened_at,r.closed_at,r.notes,r.opened_by_id??null,r.opened_by_name??null,r.closed_by_name??null);
             }
             if (data.orders) {
               const s = this.db.prepare("INSERT OR REPLACE INTO orders (id,order_number,table_id,waiter_id,customer_name,customer_phone,order_type,status,total_amount,discount_amount,tax_amount,notes,created_at,updated_at,completed_at,kot_number,kot_printed_at,discount_type,discount_reason,shift_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
@@ -653,6 +733,11 @@ class DatabaseManager {
             if (data.voidKots) {
               const s = this.db.prepare("INSERT OR REPLACE INTO void_kots (id,order_id,order_item_id,item_name,quantity,void_reason,printed_at) VALUES (?,?,?,?,?,?,?)");
               for (const r of data.voidKots) s.run(r.id,r.order_id,r.order_item_id,r.item_name,r.quantity,r.void_reason,r.printed_at);
+            }
+            if (data.reservations) {
+              this.db.prepare("DELETE FROM reservations").run();
+              const s = this.db.prepare("INSERT OR REPLACE INTO reservations (id,customer_name,phone,party_size,table_id,reservation_date,reservation_time,status,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+              for (const r of data.reservations) s.run(r.id,r.customer_name,r.phone,r.party_size,r.table_id,r.reservation_date,r.reservation_time,r.status,r.notes,r.created_at,r.updated_at);
             }
           });
           imp();
@@ -1258,6 +1343,38 @@ class DatabaseManager {
         const staff = this.db.prepare("SELECT id, name, role FROM staff WHERE pin=? AND is_active=1").get(data.pin);
         if (!staff || !['admin', 'manager'].includes(staff.role)) return { valid: false };
         return { valid: true, staff };
+      }
+
+      // ── Dashboard Stats ───────────────────────────────────────────────────
+      case "getDashboardStats": {
+        const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+        const todayEnd   = new Date(); todayEnd.setHours(23,59,59,999);
+        const tsStart = todayStart.toISOString().slice(0,19).replace('T',' ');
+        const tsEnd   = todayEnd.toISOString().slice(0,19).replace('T',' ');
+
+        const totals = this.db.prepare(`
+          SELECT
+            COUNT(*) AS order_count,
+            COALESCE(SUM(total_amount), 0) AS revenue,
+            COALESCE(SUM(discount_amount), 0) AS discounts
+          FROM orders
+          WHERE status='completed' AND completed_at BETWEEN ? AND ?
+        `).get(tsStart, tsEnd);
+
+        const tables = this.db.prepare(`
+          SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN status='occupied' THEN 1 ELSE 0 END) AS occupied
+          FROM tables WHERE is_active=1
+        `).get();
+
+        return {
+          revenue:    totals.revenue,
+          orderCount: totals.order_count,
+          discounts:  totals.discounts,
+          avgOrder:   totals.order_count > 0 ? totals.revenue / totals.order_count : 0,
+          tables:     { total: tables.total || 0, occupied: tables.occupied || 0 },
+        };
       }
 
       default:

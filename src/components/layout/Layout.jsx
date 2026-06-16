@@ -63,6 +63,18 @@ const NAV_ITEMS = [
         ),
     },
     {
+        id: 'reservations',
+        label: 'Bookings',
+        desc: 'Reservations',
+        icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5">
+                <rect x="3" y="4" width="18" height="18" rx="2"/>
+                <path d="M16 2v4M8 2v4M3 10h18"/>
+                <path d="M8 14h2M14 14h2M8 18h2M14 18h2"/>
+            </svg>
+        ),
+    },
+    {
         id: 'menu',
         label: 'Menu',
         desc: 'Food & drinks',
