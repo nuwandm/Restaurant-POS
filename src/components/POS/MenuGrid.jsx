@@ -26,11 +26,18 @@ const MenuGrid = ({ items = [], onItemClick, highlightedIndex = -1 }) => (
 
                     <div className="flex items-start justify-between gap-1 mb-1">
                         <p className="text-white font-semibold text-sm leading-tight line-clamp-2 flex-1">{item.name}</p>
-                        {!(item.kot_required === 1 || item.kot_required === true) && (
-                            <span className="shrink-0 px-1 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 leading-tight mt-0.5">
-                                Ready
-                            </span>
-                        )}
+                        <div className="flex flex-col items-end gap-0.5 shrink-0">
+                            {!(item.kot_required === 1 || item.kot_required === true) && (
+                                <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 leading-tight">
+                                    Ready
+                                </span>
+                            )}
+                            {item.code && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-gray-700/80 text-gray-400 border border-gray-600/50 leading-tight font-mono tracking-wide">
+                                    {item.code}
+                                </span>
+                            )}
+                        </div>
                     </div>
                     <p className="text-xs mb-2" style={{ color: accent + 'cc' }}>{item.category}</p>
                     <p className="text-base font-bold text-blue-400 group-hover:text-blue-300 transition-colors">

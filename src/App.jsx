@@ -57,6 +57,7 @@ const TableManagementView = lazy(() => import('./views/TableManagementView'));
 const KitchenView = lazy(() => import('./views/KitchenView'));
 const ShiftView = lazy(() => import('./views/ShiftView'));
 const StaffView = lazy(() => import('./views/StaffView'));
+const EODReportView = lazy(() => import('./views/EODReportView'));
 
 function App() {
   const dispatch = useDispatch();
@@ -95,6 +96,7 @@ function App() {
     'nav-settings': () => navTo('settings'),
     'nav-shift':    () => navTo('shift'),
     'nav-staff':    () => navTo('staff'),
+    'nav-eod':      () => navTo('eod'),
   }), [currentUser]);
 
   useEffect(() => {
@@ -218,6 +220,7 @@ function App() {
             {currentView === 'settings' && canViewPage(role, 'settings') && <SettingsView onHotelNameChange={setHotelName} />}
             {currentView === 'shift'    && canViewPage(role, 'shift')    && <ShiftView />}
             {currentView === 'staff'    && canViewPage(role, 'staff')    && <StaffView />}
+            {currentView === 'eod'      && canViewPage(role, 'eod')      && <EODReportView />}
           </Suspense>
         </Layout>
 

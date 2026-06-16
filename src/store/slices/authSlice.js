@@ -25,6 +25,9 @@ const authSlice = createSlice({
     clearPinResetRequired: (state) => {
       if (state.currentUser) state.currentUser.pin_reset_required = 0;
     },
+    updateCurrentUserPin: (state, action) => {
+      if (state.currentUser) state.currentUser.pin = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -34,5 +37,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, clearAuthError, clearPinResetRequired } = authSlice.actions;
+export const { logout, clearAuthError, clearPinResetRequired, updateCurrentUserPin } = authSlice.actions;
 export default authSlice.reducer;

@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
+import { useDispatch } from 'react-redux';
+import { updateCurrentUserPin } from '../../store/slices/authSlice';
 import toast from 'react-hot-toast';
 
 export default function ChangePinModal({ user, onClose }) {
+    const dispatch = useDispatch();
     const [currentPin, setCurrentPin] = useState('');
     const [newPin, setNewPin]         = useState('');
     const [confirmPin, setConfirmPin] = useState('');
@@ -33,6 +36,7 @@ export default function ChangePinModal({ user, onClose }) {
                 data: { id: user.id, name: user.name, role: user.role, pin: newPin, email: user.email || '', phone: user.phone || '' },
             });
             if (res.success) {
+                dispatch(updateCurrentUserPin(newPin));
                 toast.success('PIN changed successfully');
                 onClose();
             } else {

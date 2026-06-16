@@ -546,7 +546,21 @@ const SettingsView = ({ onHotelNameChange }) => {
                                     <span className="w-1 h-4 bg-yellow-500 rounded-full inline-block" />
                                     Export Backup
                                 </h3>
-                                <p className="text-gray-400 text-sm">Download a full JSON snapshot of all orders, menu items, categories, tables, and settings. Use this to migrate to another machine or before a reset.</p>
+                                <p className="text-gray-400 text-sm">Download a complete JSON snapshot of everything. Use this to migrate to another machine or before a reset.</p>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                    {[
+                                        'Menu items & categories','Tables & layout',
+                                        'Staff & PINs','All orders & items',
+                                        'Payments & transactions','Shift history',
+                                        'KOT history & void log','Order & KOT counters',
+                                        'Settings & shortcuts','POS zones',
+                                    ].map(item => (
+                                        <div key={item} className="flex items-center gap-1.5 text-xs text-gray-500">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" className="w-3 h-3 shrink-0"><path d="M20 6L9 17l-5-5"/></svg>
+                                            {item}
+                                        </div>
+                                    ))}
+                                </div>
                                 <button
                                     onClick={handleExportBackup}
                                     disabled={!!backupStatus}

@@ -232,6 +232,12 @@ class DatabaseManager {
     const staffCols = this.db.prepare("PRAGMA table_info(staff)").all().map(c => c.name);
     if (!staffCols.includes('pin_reset_required')) this.db.exec("ALTER TABLE staff ADD COLUMN pin_reset_required INTEGER DEFAULT 0");
 
+    // ── shifts: who opened/closed the shift ──
+    const shiftCols = this.db.prepare("PRAGMA table_info(shifts)").all().map(c => c.name);
+    if (!shiftCols.includes('opened_by_id'))   this.db.exec("ALTER TABLE shifts ADD COLUMN opened_by_id INTEGER");
+    if (!shiftCols.includes('opened_by_name')) this.db.exec("ALTER TABLE shifts ADD COLUMN opened_by_name TEXT");
+    if (!shiftCols.includes('closed_by_name')) this.db.exec("ALTER TABLE shifts ADD COLUMN closed_by_name TEXT");
+
     // ── void_kots audit table ──
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS void_kots (
@@ -554,40 +560,100 @@ class DatabaseManager {
         return { success: true };
 
       case "exportBackup": {
-        const categories  = this.db.prepare("SELECT * FROM categories").all();
-        const menuItems   = this.db.prepare("SELECT * FROM menu_items").all();
-        const tables      = this.db.prepare("SELECT * FROM tables").all();
-        const orders      = this.db.prepare("SELECT * FROM orders").all();
-        const orderItems  = this.db.prepare("SELECT * FROM order_items").all();
-        const transactions = this.db.prepare("SELECT * FROM transactions").all();
-        const staff       = this.db.prepare("SELECT * FROM staff").all();
-        return { categories, menuItems, tables, orders, orderItems, transactions, staff, exportedAt: new Date().toISOString() };
+        const categories    = this.db.prepare("SELECT * FROM categories").all();
+        const menuItems     = this.db.prepare("SELECT * FROM menu_items").all();
+        const tables        = this.db.prepare("SELECT * FROM tables").all();
+        const staff         = this.db.prepare("SELECT * FROM staff").all();
+        const orders        = this.db.prepare("SELECT * FROM orders").all();
+        const orderItems    = this.db.prepare("SELECT * FROM order_items").all();
+        const transactions  = this.db.prepare("SELECT * FROM transactions").all();
+        const shifts        = this.db.prepare("SELECT * FROM shifts").all();
+        const voidKots      = this.db.prepare("SELECT * FROM void_kots").all();
+        const kotItems      = this.db.prepare("SELECT * FROM kot_items").all();
+        const kotSnapshots  = this.db.prepare("SELECT * FROM kot_snapshots").all();
+        const kotCounters   = this.db.prepare("SELECT * FROM kot_counters").all();
+        const orderCounters = this.db.prepare("SELECT * FROM order_counters").all();
+        return {
+          categories, menuItems, tables, staff,
+          orders, orderItems, transactions,
+          shifts, voidKots, kotItems, kotSnapshots, kotCounters, orderCounters,
+          exportedAt: new Date().toISOString(),
+          backupVersion: '3.0',
+        };
       }
 
       case "importBackup": {
-        // Disable FK checks, restore in dependency order, re-enable after
         this.db.pragma("foreign_keys = OFF");
         try {
           const imp = this.db.transaction(() => {
-            // Delete children first, then parents
+            // Delete in child → parent dependency order
+            this.db.prepare("DELETE FROM void_kots").run();
+            this.db.prepare("DELETE FROM kot_items").run();
+            this.db.prepare("DELETE FROM kot_snapshots").run();
+            this.db.prepare("DELETE FROM kot_counters").run();
+            this.db.prepare("DELETE FROM order_counters").run();
             this.db.prepare("DELETE FROM transactions").run();
             this.db.prepare("DELETE FROM order_items").run();
             this.db.prepare("DELETE FROM orders").run();
+            this.db.prepare("DELETE FROM shifts").run();
             this.db.prepare("DELETE FROM tables").run();
             this.db.prepare("DELETE FROM menu_items").run();
             this.db.prepare("DELETE FROM categories").run();
             this.db.prepare("DELETE FROM staff").run();
-            this.db.prepare("DELETE FROM kot_counters").run();
-            this.db.prepare("DELETE FROM kot_snapshots").run();
 
-            // Insert parents first, then children
-            if (data.categories)   { const s = this.db.prepare("INSERT OR REPLACE INTO categories (id,name,color,display_order,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?)");                                                                                                              for (const r of data.categories)   s.run(r.id,r.name,r.color,r.display_order,r.is_active,r.created_at,r.updated_at); }
-            if (data.menuItems)    { const s = this.db.prepare("INSERT OR REPLACE INTO menu_items (id,name,code,category,price,cost,description,image_url,preparation_time,is_available,is_active,kot_required,tags,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");               for (const r of data.menuItems)    s.run(r.id,r.name,r.code,r.category,r.price,r.cost,r.description,r.image_url,r.preparation_time,r.is_available,r.is_active,r.kot_required??1,r.tags,r.created_at,r.updated_at); }
-            if (data.tables)       { const s = this.db.prepare("INSERT OR REPLACE INTO tables (id,number,capacity,zone,position_x,position_y,shape,is_active,created_at) VALUES (?,?,?,?,?,?,?,?,?)");                                                                                               for (const r of data.tables)       s.run(r.id,r.number,r.capacity,r.zone,r.position_x,r.position_y,r.shape,r.is_active,r.created_at); }
-            if (data.staff)        { const s = this.db.prepare("INSERT OR REPLACE INTO staff (id,name,role,pin,email,phone,is_active,created_at,last_login) VALUES (?,?,?,?,?,?,?,?,?)");                                                                                                             for (const r of data.staff)        s.run(r.id,r.name,r.role,r.pin,r.email,r.phone,r.is_active,r.created_at,r.last_login); }
-            if (data.orders)       { const s = this.db.prepare("INSERT OR REPLACE INTO orders (id,order_number,table_id,waiter_id,customer_name,customer_phone,order_type,status,total_amount,discount_amount,tax_amount,notes,created_at,updated_at,completed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"); for (const r of data.orders) s.run(r.id,r.order_number,r.table_id,r.waiter_id,r.customer_name,r.customer_phone,r.order_type,r.status,r.total_amount,r.discount_amount,r.tax_amount,r.notes,r.created_at,r.updated_at,r.completed_at); }
-            if (data.orderItems)   { const s = this.db.prepare("INSERT OR REPLACE INTO order_items (id,order_id,menu_item_id,quantity,price,notes,status,prepared_at,served_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)");                                                                             for (const r of data.orderItems)   s.run(r.id,r.order_id,r.menu_item_id,r.quantity,r.price,r.notes,r.status,r.prepared_at,r.served_at,r.created_at); }
-            if (data.transactions) { const s = this.db.prepare("INSERT OR REPLACE INTO transactions (id,order_id,transaction_number,payment_method,amount_paid,change_amount,status,cashier_id,reference_number,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)");                                          for (const r of data.transactions) s.run(r.id,r.order_id,r.transaction_number,r.payment_method,r.amount_paid,r.change_amount,r.status,r.cashier_id,r.reference_number,r.created_at); }
+            // Restore parents first, then children
+            if (data.categories) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO categories (id,name,color,display_order,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?)");
+              for (const r of data.categories) s.run(r.id,r.name,r.color,r.display_order,r.is_active,r.created_at,r.updated_at);
+            }
+            if (data.menuItems) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO menu_items (id,name,code,category,price,cost,description,image_url,preparation_time,is_available,is_active,kot_required,tags,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+              for (const r of data.menuItems) s.run(r.id,r.name,r.code,r.category,r.price,r.cost,r.description,r.image_url,r.preparation_time,r.is_available,r.is_active,r.kot_required??1,r.tags,r.created_at,r.updated_at);
+            }
+            if (data.tables) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO tables (id,number,capacity,zone,position_x,position_y,shape,is_active,created_at) VALUES (?,?,?,?,?,?,?,?,?)");
+              for (const r of data.tables) s.run(r.id,r.number,r.capacity,r.zone,r.position_x,r.position_y,r.shape,r.is_active,r.created_at);
+            }
+            if (data.staff) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO staff (id,name,role,pin,email,phone,is_active,created_at,last_login,pin_reset_required) VALUES (?,?,?,?,?,?,?,?,?,?)");
+              for (const r of data.staff) s.run(r.id,r.name,r.role,r.pin,r.email,r.phone,r.is_active,r.created_at,r.last_login,r.pin_reset_required??0);
+            }
+            if (data.shifts) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO shifts (id,opening_float,closing_cash_count,expected_cash,cash_difference,total_cash_sales,total_card_sales,total_mobile_sales,total_discounts,order_count,status,opened_at,closed_at,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+              for (const r of data.shifts) s.run(r.id,r.opening_float,r.closing_cash_count,r.expected_cash,r.cash_difference,r.total_cash_sales,r.total_card_sales,r.total_mobile_sales,r.total_discounts,r.order_count,r.status,r.opened_at,r.closed_at,r.notes);
+            }
+            if (data.orders) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO orders (id,order_number,table_id,waiter_id,customer_name,customer_phone,order_type,status,total_amount,discount_amount,tax_amount,notes,created_at,updated_at,completed_at,kot_number,kot_printed_at,discount_type,discount_reason,shift_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+              for (const r of data.orders) s.run(r.id,r.order_number,r.table_id,r.waiter_id,r.customer_name,r.customer_phone,r.order_type,r.status,r.total_amount,r.discount_amount,r.tax_amount,r.notes,r.created_at,r.updated_at,r.completed_at,r.kot_number,r.kot_printed_at,r.discount_type,r.discount_reason,r.shift_id);
+            }
+            if (data.orderItems) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO order_items (id,order_id,menu_item_id,quantity,price,notes,status,prepared_at,served_at,created_at,voided,void_reason,voided_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
+              for (const r of data.orderItems) s.run(r.id,r.order_id,r.menu_item_id,r.quantity,r.price,r.notes,r.status,r.prepared_at,r.served_at,r.created_at,r.voided??0,r.void_reason,r.voided_at);
+            }
+            if (data.transactions) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO transactions (id,order_id,transaction_number,payment_method,amount_paid,change_amount,status,cashier_id,reference_number,created_at,shift_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+              for (const r of data.transactions) s.run(r.id,r.order_id,r.transaction_number,r.payment_method,r.amount_paid,r.change_amount,r.status,r.cashier_id,r.reference_number,r.created_at,r.shift_id);
+            }
+            if (data.kotItems) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO kot_items (id,order_id,kot_number,menu_item_id,name,quantity,qty_served,notes,printed_at) VALUES (?,?,?,?,?,?,?,?,?)");
+              for (const r of data.kotItems) s.run(r.id,r.order_id,r.kot_number,r.menu_item_id,r.name,r.quantity,r.qty_served,r.notes,r.printed_at);
+            }
+            if (data.kotSnapshots) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO kot_snapshots (order_id,menu_item_id,qty_sent) VALUES (?,?,?)");
+              for (const r of data.kotSnapshots) s.run(r.order_id,r.menu_item_id,r.qty_sent);
+            }
+            if (data.kotCounters) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO kot_counters (date,last_number) VALUES (?,?)");
+              for (const r of data.kotCounters) s.run(r.date,r.last_number);
+            }
+            if (data.orderCounters) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO order_counters (id,last_number) VALUES (?,?)");
+              for (const r of data.orderCounters) s.run(r.id,r.last_number);
+            }
+            if (data.voidKots) {
+              const s = this.db.prepare("INSERT OR REPLACE INTO void_kots (id,order_id,order_item_id,item_name,quantity,void_reason,printed_at) VALUES (?,?,?,?,?,?,?)");
+              for (const r of data.voidKots) s.run(r.id,r.order_id,r.order_item_id,r.item_name,r.quantity,r.void_reason,r.printed_at);
+            }
           });
           imp();
         } finally {
@@ -844,11 +910,85 @@ class DatabaseManager {
         return { totals, byDay, topItems, byMethod, byType, hourly };
       }
 
+      case "getDailySalesReport": {
+        const reportDate  = data?.date || new Date().toLocaleDateString('en-CA');
+        const tzOffsetMin = new Date().getTimezoneOffset();
+        const tzMod       = (-tzOffsetMin) >= 0 ? `+${-tzOffsetMin} minutes` : `${-tzOffsetMin} minutes`;
+        const fromTs      = new Date(`${reportDate}T00:00:00`).toISOString().slice(0, 19).replace('T', ' ');
+        const toTs        = new Date(`${reportDate}T23:59:59`).toISOString().slice(0, 19).replace('T', ' ');
+
+        const totals = this.db.prepare(`
+          SELECT
+            COUNT(*) as order_count,
+            COALESCE(SUM(total_amount), 0)               as revenue,
+            COALESCE(SUM(tax_amount), 0)                 as tax,
+            COALESCE(SUM(total_amount - tax_amount), 0)  as subtotal,
+            COALESCE(AVG(total_amount), 0)               as avg_order,
+            COALESCE(SUM(discount_amount), 0)            as total_discounts
+          FROM orders
+          WHERE status = 'completed' AND completed_at BETWEEN ? AND ?
+        `).get(fromTs, toTs);
+
+        const byMethod = this.db.prepare(`
+          SELECT payment_method, COUNT(*) as count, COALESCE(SUM(amount_paid), 0) as total
+          FROM transactions
+          JOIN orders ON transactions.order_id = orders.id
+          WHERE orders.status = 'completed' AND orders.completed_at BETWEEN ? AND ?
+          GROUP BY payment_method
+        `).all(fromTs, toTs);
+
+        const topItems = this.db.prepare(`
+          SELECT m.name, m.category,
+            SUM(oi.quantity) as qty,
+            COALESCE(SUM(oi.quantity * oi.price), 0) as revenue
+          FROM order_items oi
+          JOIN menu_items m ON oi.menu_item_id = m.id
+          JOIN orders o ON oi.order_id = o.id
+          WHERE o.status = 'completed' AND o.completed_at BETWEEN ? AND ?
+            AND (oi.voided IS NULL OR oi.voided = 0)
+          GROUP BY oi.menu_item_id ORDER BY qty DESC LIMIT 10
+        `).all(fromTs, toTs);
+
+        const byType = this.db.prepare(`
+          SELECT order_type, COUNT(*) as count, COALESCE(SUM(total_amount), 0) as revenue
+          FROM orders
+          WHERE status = 'completed' AND completed_at BETWEEN ? AND ?
+          GROUP BY order_type
+        `).all(fromTs, toTs);
+
+        const hourly = this.db.prepare(`
+          SELECT
+            CAST(strftime('%H', completed_at, ?) AS INTEGER) as hour,
+            COUNT(*) as orders,
+            COALESCE(SUM(total_amount), 0) as revenue
+          FROM orders
+          WHERE status = 'completed' AND completed_at BETWEEN ? AND ?
+          GROUP BY hour ORDER BY hour ASC
+        `).all(tzMod, fromTs, toTs);
+
+        const voidCount = this.db.prepare(`
+          SELECT COUNT(*) as count FROM order_items oi
+          JOIN orders o ON oi.order_id = o.id
+          WHERE oi.voided = 1 AND o.completed_at BETWEEN ? AND ?
+        `).get(fromTs, toTs);
+
+        const shiftInfo = this.db.prepare(`
+          SELECT id, opening_float, opened_at, closed_at, status,
+            total_cash_sales, total_card_sales, total_mobile_sales,
+            closing_cash_count, expected_cash, cash_difference
+          FROM shifts
+          WHERE DATE(opened_at, ?) = ?
+          ORDER BY opened_at DESC LIMIT 1
+        `).get(tzMod, reportDate);
+
+        return { date: reportDate, totals, byMethod, topItems, byType, hourly, voidCount, shiftInfo };
+      }
+
       // ── Staff / Auth ──────────────────────────────────────────────────────
       case "loginWithPin": {
         const staff = data.id
-          ? this.db.prepare("SELECT id, name, role, pin_reset_required FROM staff WHERE id=? AND pin=? AND is_active=1").get(data.id, data.pin)
-          : this.db.prepare("SELECT id, name, role, pin_reset_required FROM staff WHERE pin=? AND is_active=1").get(data.pin);
+          ? this.db.prepare("SELECT id, name, role, pin, pin_reset_required FROM staff WHERE id=? AND pin=? AND is_active=1").get(data.id, data.pin)
+          : this.db.prepare("SELECT id, name, role, pin, pin_reset_required FROM staff WHERE pin=? AND is_active=1").get(data.pin);
         if (!staff) return { success: false, error: "Invalid PIN" };
         this.db.prepare("UPDATE staff SET last_login=CURRENT_TIMESTAMP WHERE id=?").run(staff.id);
         return { success: true, staff };
@@ -902,8 +1042,9 @@ class DatabaseManager {
         const open = this.db.prepare("SELECT id FROM shifts WHERE status='open' LIMIT 1").get();
         if (open) throw new Error("A shift is already open. Close the current shift before opening a new one.");
         const { lastInsertRowid } = this.db.prepare(`
-          INSERT INTO shifts (opening_float, status, opened_at) VALUES (?, 'open', CURRENT_TIMESTAMP)
-        `).run(data.openingFloat ?? 0);
+          INSERT INTO shifts (opening_float, status, opened_at, opened_by_id, opened_by_name)
+          VALUES (?, 'open', CURRENT_TIMESTAMP, ?, ?)
+        `).run(data.openingFloat ?? 0, data.openedById ?? null, data.openedByName ?? null);
         return { success: true, shiftId: lastInsertRowid };
       }
 
@@ -916,7 +1057,6 @@ class DatabaseManager {
         const shift = this.db.prepare("SELECT * FROM shifts WHERE id=? AND status='open'").get(data.shiftId);
         if (!shift) throw new Error("Shift not found or already closed.");
 
-        // Aggregate sales from completed orders in this shift
         const sales = this.db.prepare(`
           SELECT
             COALESCE(SUM(CASE WHEN t.payment_method='cash'   THEN t.amount_paid END), 0) AS cash,
@@ -933,22 +1073,20 @@ class DatabaseManager {
         `).get(data.shiftId);
 
         const expectedCash = (shift.opening_float || 0) + (sales.cash || 0);
-        const cashDiff = (data.closingCashCount ?? 0) - expectedCash;
+        const cashDiff     = (data.closingCashCount ?? 0) - expectedCash;
 
         this.db.prepare(`
           UPDATE shifts SET
             closing_cash_count=?, expected_cash=?, cash_difference=?,
             total_cash_sales=?, total_card_sales=?, total_mobile_sales=?,
             total_discounts=?, order_count=?, status='closed',
-            closed_at=CURRENT_TIMESTAMP, notes=?
+            closed_at=CURRENT_TIMESTAMP, notes=?, closed_by_name=?
           WHERE id=?
         `).run(
-          data.closingCashCount ?? 0,
-          expectedCash,
-          cashDiff,
+          data.closingCashCount ?? 0, expectedCash, cashDiff,
           sales.cash, sales.card, sales.mobile,
           discounts.total, sales.order_count,
-          data.notes || null,
+          (data.notes && data.notes.trim() && data.notes.trim() !== '0') ? data.notes.trim() : null, data.closedByName || null,
           data.shiftId
         );
         return { success: true };
@@ -957,22 +1095,90 @@ class DatabaseManager {
       case "getShiftSummary": {
         const shift = this.db.prepare("SELECT * FROM shifts WHERE id=?").get(data.shiftId);
         if (!shift) throw new Error("Shift not found.");
+
+        // For open shifts, stored totals are NULL — compute live from orders
+        if (shift.status === 'open') {
+          const liveSales = this.db.prepare(`
+            SELECT
+              COALESCE(SUM(CASE WHEN t.payment_method='cash'   THEN t.amount_paid END), 0) AS total_cash_sales,
+              COALESCE(SUM(CASE WHEN t.payment_method='card'   THEN t.amount_paid END), 0) AS total_card_sales,
+              COALESCE(SUM(CASE WHEN t.payment_method='mobile' THEN t.amount_paid END), 0) AS total_mobile_sales,
+              COUNT(DISTINCT o.id) AS order_count
+            FROM orders o
+            LEFT JOIN transactions t ON t.order_id = o.id
+            WHERE o.shift_id = ? AND o.status = 'completed'
+          `).get(data.shiftId);
+
+          const liveDiscounts = this.db.prepare(`
+            SELECT COALESCE(SUM(discount_amount), 0) AS total_discounts
+            FROM orders WHERE shift_id=? AND status='completed'
+          `).get(data.shiftId);
+
+          shift.total_cash_sales   = liveSales.total_cash_sales;
+          shift.total_card_sales   = liveSales.total_card_sales;
+          shift.total_mobile_sales = liveSales.total_mobile_sales;
+          shift.order_count        = liveSales.order_count;
+          shift.total_discounts    = liveDiscounts.total_discounts;
+        }
+
         const topItems = this.db.prepare(`
-          SELECT m.name, SUM(oi.quantity) AS qty, SUM(oi.quantity * oi.price) AS revenue
+          SELECT m.name, m.category, SUM(oi.quantity) AS qty,
+            SUM(oi.quantity * oi.price) AS revenue
           FROM order_items oi
           JOIN menu_items m ON oi.menu_item_id = m.id
           JOIN orders o ON oi.order_id = o.id
           WHERE o.shift_id = ? AND o.status = 'completed'
-          GROUP BY oi.menu_item_id ORDER BY qty DESC LIMIT 5
+            AND (oi.voided IS NULL OR oi.voided = 0)
+          GROUP BY oi.menu_item_id ORDER BY qty DESC LIMIT 8
         `).all(data.shiftId);
-        return { shift, topItems };
+
+        const byMethod = this.db.prepare(`
+          SELECT t.payment_method,
+            COUNT(*) AS count,
+            COALESCE(SUM(t.amount_paid), 0) AS total
+          FROM transactions t
+          JOIN orders o ON t.order_id = o.id
+          WHERE o.shift_id = ? AND o.status = 'completed'
+          GROUP BY t.payment_method
+        `).all(data.shiftId);
+
+        const byType = this.db.prepare(`
+          SELECT order_type, COUNT(*) AS count,
+            COALESCE(SUM(total_amount), 0) AS revenue
+          FROM orders
+          WHERE shift_id = ? AND status = 'completed'
+          GROUP BY order_type
+        `).all(data.shiftId);
+
+        const voidCount = this.db.prepare(`
+          SELECT COUNT(*) AS count FROM order_items oi
+          JOIN orders o ON oi.order_id = o.id
+          WHERE oi.voided = 1 AND o.shift_id = ?
+        `).get(data.shiftId);
+
+        return { shift, topItems, byMethod, byType, voidCount };
       }
 
       case "getShiftHistory": {
         const shifts = this.db.prepare(`
-          SELECT * FROM shifts ORDER BY opened_at DESC LIMIT 50
+          SELECT * FROM shifts ORDER BY opened_at DESC LIMIT 100
         `).all();
         return shifts;
+      }
+
+      case "getShiftHourlyBreakdown": {
+        const rows = this.db.prepare(`
+          SELECT
+            strftime('%H', o.created_at) AS hour,
+            COUNT(DISTINCT o.id) AS orders,
+            COALESCE(SUM(t.amount_paid), 0) AS revenue
+          FROM orders o
+          LEFT JOIN transactions t ON t.order_id = o.id
+          WHERE o.shift_id = ? AND o.status = 'completed'
+          GROUP BY strftime('%H', o.created_at)
+          ORDER BY hour ASC
+        `).all(data.shiftId);
+        return rows;
       }
 
       // ── Void Item ─────────────────────────────────────────────────────────

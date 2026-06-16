@@ -6,14 +6,14 @@ export const loadOpenShift = createAsyncThunk('shift/loadOpen', async () => {
   return res.data; // null if none open
 });
 
-export const openShift = createAsyncThunk('shift/open', async (openingFloat) => {
-  const res = await window.electron.database({ action: 'openShift', data: { openingFloat } });
+export const openShift = createAsyncThunk('shift/open', async ({ openingFloat, openedById, openedByName }) => {
+  const res = await window.electron.database({ action: 'openShift', data: { openingFloat, openedById, openedByName } });
   if (!res.success) throw new Error(res.error);
-  return res.data; // { shiftId }
+  return res.data;
 });
 
-export const closeShift = createAsyncThunk('shift/close', async ({ shiftId, closingCashCount, notes }) => {
-  const res = await window.electron.database({ action: 'closeShift', data: { shiftId, closingCashCount, notes } });
+export const closeShift = createAsyncThunk('shift/close', async ({ shiftId, closingCashCount, notes, closedByName }) => {
+  const res = await window.electron.database({ action: 'closeShift', data: { shiftId, closingCashCount, notes, closedByName } });
   if (!res.success) throw new Error(res.error);
   return res.data;
 });
@@ -21,7 +21,7 @@ export const closeShift = createAsyncThunk('shift/close', async ({ shiftId, clos
 export const loadShiftSummary = createAsyncThunk('shift/summary', async (shiftId) => {
   const res = await window.electron.database({ action: 'getShiftSummary', data: { shiftId } });
   if (!res.success) throw new Error(res.error);
-  return res.data; // { shift, topItems }
+  return res.data; // { shift, topItems, byMethod, byType, voidCount }
 });
 
 const shiftSlice = createSlice({
