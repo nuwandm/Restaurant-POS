@@ -228,7 +228,7 @@ const Layout = ({ children, currentView, onViewChange, hotelName = 'Hotel POS', 
                     {!collapsed ? (
                         <>
                             <div className="min-w-0 flex-1">
-                                <p className="text-white font-bold text-sm truncate leading-tight">{hotelName}</p>
+                                <p className="text-gray-200 font-bold text-sm truncate leading-tight">{hotelName}</p>
                                 <p className="text-gray-500 text-[11px] tracking-wide">POS System</p>
                             </div>
                             <button
@@ -272,8 +272,8 @@ const Layout = ({ children, currentView, onViewChange, hotelName = 'Hotel POS', 
                                     transition-all duration-150 group
                                     ${collapsed ? 'justify-center px-0 py-3' : 'justify-start gap-2 px-3 py-2.5'}
                                     ${active
-                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
-                                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                        ? 'bg-blue-600/80 text-gray-100 shadow-lg shadow-blue-900/30'
+                                        : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
                                     }`}
                             >
                                 {/* Active indicator bar */}
@@ -325,7 +325,7 @@ const Layout = ({ children, currentView, onViewChange, hotelName = 'Hotel POS', 
                             {!collapsed ? (
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-white text-xs font-semibold truncate">{currentUser.name}</p>
+                                        <p className="text-gray-200 text-xs font-semibold truncate">{currentUser.name}</p>
                                         <p className={`text-[10px] font-bold uppercase tracking-wider ${ROLE_COLORS[currentUser.role] || 'text-gray-400'}`}>
                                             {ROLE_LABELS[currentUser.role] || currentUser.role}
                                         </p>

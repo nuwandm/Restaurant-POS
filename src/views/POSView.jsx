@@ -132,12 +132,20 @@ const POSView = () => {
         return () => clearInterval(id);
     }, [loadDashStats]);
 
-    const [reservedTableIds, setReservedTableIds] = useState(new Set());
+    // reservations: map of tableId -> nearest upcoming reservation object
+    const [tableReservations, setTableReservations] = useState({});
+    const [reservationWarning, setReservationWarning] = useState(null); // { table, reservation, prepMins }
     const loadTodayReservations = useCallback(async () => {
         try {
             const res = await window.electron.database({ action: 'getTodayReservations' });
             if (res.success && Array.isArray(res.data)) {
-                setReservedTableIds(new Set(res.data.map(r => r.table_id).filter(Boolean)));
+                // Build map: tableId -> earliest active reservation
+                const map = {};
+                for (const r of res.data) {
+                    if (!r.table_id) continue;
+                    if (!map[r.table_id]) map[r.table_id] = r;
+                }
+                setTableReservations(map);
             }
         } catch { /* silent */ }
     }, []);
@@ -146,6 +154,14 @@ const POSView = () => {
         const id = setInterval(loadTodayReservations, 60000);
         return () => clearInterval(id);
     }, [loadTodayReservations]);
+
+    const getSettings = () => {
+        try { return JSON.parse(localStorage.getItem('hotelSettings') || '{}'); } catch { return {}; }
+    };
+    const getPrepMins = () => {
+        const s = getSettings();
+        return typeof s.tablePreparationTime === 'number' ? s.tablePreparationTime : 30;
+    };
 
     const { selectedTable, tables } = useSelector(state => state.tables);
     const tableOrders = useSelector(state => state.orders.tableOrders);
@@ -177,8 +193,27 @@ const POSView = () => {
     const handleTableSelect = useCallback((table) => {
         if (mode !== 'dine-in') setMode('dine-in');
         if (selectedTable?.id === table.id) return;
+
+        // Check if table has an upcoming reservation in the prep window
+        const reservation = tableReservations[table.id];
+        if (reservation && table.status !== 'occupied') {
+            const resTime = new Date(`${reservation.reservation_date}T${reservation.reservation_time}`);
+            const minsAway = Math.round((resTime - Date.now()) / 60000);
+            const prepMins = getPrepMins();
+            if (minsAway >= 0 && minsAway <= prepMins) {
+                // Table is in prep window — show warning
+                setReservationWarning({ table, reservation, minsAway, prepMins });
+                return;
+            }
+            if (minsAway < 0 && minsAway > -60) {
+                // Reservation time has passed but within 1 hour — guest is likely being seated
+                setReservationWarning({ table, reservation, minsAway, prepMins });
+                return;
+            }
+        }
+
         dispatch(selectTable(table));
-    }, [dispatch, selectedTable, mode]);
+    }, [dispatch, selectedTable, mode, tableReservations]);
 
     /* ── Add item ─────────────────────────────────────── */
     const handleAddItem = useCallback(async (item) => {
@@ -609,14 +644,14 @@ const POSView = () => {
     }, [showPayment, posActions, menuItems, handleAddItem]);
 
     return (
-        <div className="flex h-full bg-gray-900">
+        <div className="flex h-full" style={{background:'#0f1319'}}>
 
             {/* ── Left: mode switch + tables ── */}
-            <div className="w-60 bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden">
+            <div className="w-60 border-r border-gray-700/50 flex flex-col overflow-hidden" style={{background:'#141922'}}>
 
                 {/* Mode switcher */}
-                <div className="p-3 border-b border-gray-700 shrink-0">
-                    <div className="flex bg-gray-900 rounded-xl p-1 gap-1">
+                <div className="p-3 border-b border-gray-700/40 shrink-0">
+                    <div className="flex bg-gray-900/60 rounded-xl p-1 gap-1">
                         <button
                             onClick={() => switchMode('dine-in')}
                             className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all
@@ -786,7 +821,8 @@ const POSView = () => {
                             tables={tables}
                             onTableSelect={handleTableSelect}
                             selectedTable={selectedTable}
-                            reservedTableIds={reservedTableIds}
+                            reservations={tableReservations}
+                            prepMins={getPrepMins()}
                         />
                     </div>
                 )}
@@ -829,7 +865,7 @@ const POSView = () => {
                 )}
 
                 {/* Category tabs + Search */}
-                <div className="bg-gray-800 px-3 pt-2 pb-2 border-b border-gray-700/60 shrink-0 space-y-2">
+                <div className="px-3 pt-2 pb-2 border-b border-gray-700/40 shrink-0 space-y-2" style={{background:'#141922'}}>
                     {/* Search bar */}
                     <div className="relative">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -841,7 +877,7 @@ const POSView = () => {
                             value={searchQuery}
                             onChange={e => { setSearchQuery(e.target.value); if (e.target.value) setCategoryFilter('All'); }}
                             placeholder="Search menu items by name or code..."
-                            className="w-full bg-gray-700/60 border border-gray-600/60 focus:border-blue-500 focus:bg-gray-700 text-white text-xs rounded-lg pl-8 pr-8 py-2 outline-none transition-colors placeholder-gray-500"
+                            className="w-full bg-gray-700/30 border border-gray-600/40 focus:border-blue-500/60 focus:bg-gray-700/50 text-gray-200 text-xs rounded-lg pl-8 pr-8 py-2 outline-none transition-colors placeholder-gray-600"
                             onKeyDown={e => {
                                 if (!searchQuery || filteredItems.length === 0) return;
                                 const cols = window.innerWidth >= 1280 ? 4 : 3; // matches xl:grid-cols-4
@@ -895,7 +931,7 @@ const POSView = () => {
                         <div className="flex flex-wrap gap-1.5">
                             <button onClick={() => setCategoryFilter('All')}
                                 className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors
-                                    ${categoryFilter === 'All' ? 'bg-blue-600 text-white' : 'bg-gray-700/80 text-gray-300 hover:bg-gray-600'}`}>
+                                    ${categoryFilter === 'All' ? 'bg-blue-600 text-white' : 'bg-gray-700/40 text-gray-400 hover:bg-gray-700/70 hover:text-gray-200'}`}>
                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
                                 All Items
                             </button>
@@ -905,7 +941,7 @@ const POSView = () => {
                                 return (
                                     <button key={cat.name} onClick={() => setCategoryFilter(cat.name)}
                                         className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors
-                                            ${isActive ? 'text-white' : 'bg-gray-700/80 text-gray-300 hover:bg-gray-600'}`}
+                                            ${isActive ? 'text-white' : 'bg-gray-700/40 text-gray-400 hover:bg-gray-700/70 hover:text-gray-200'}`}
                                         style={isActive ? { backgroundColor: color } : {}}>
                                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                                         {cat.name}
@@ -945,13 +981,13 @@ const POSView = () => {
                     </div>
                 )}
 
-                <div className="flex-1 p-4 overflow-y-auto">
+                <div className="flex-1 p-4 overflow-y-auto" style={{background:'#111620'}}>
                     <MenuGrid items={filteredItems} onItemClick={handleAddItem} highlightedIndex={highlightedIndex} />
                 </div>
             </div>
 
             {/* ── Right: order panel ── */}
-            <div className="w-72 bg-gray-800 border-l border-gray-700 shrink-0">
+            <div className="w-72 border-l border-gray-700/50 shrink-0" style={{background:'#141922'}}>
                 <OrderPanel
                     order={currentOrder}
                     table={mode === 'dine-in' ? selectedTable : null}
@@ -976,6 +1012,99 @@ const POSView = () => {
                     onCancel={() => setShowPayment(false)}
                 />
             )}
+
+            {/* Reservation Warning Modal */}
+            {reservationWarning && (() => {
+                const { table, reservation, minsAway, prepMins } = reservationWarning;
+                const isOverdue = minsAway < 0;
+                const fmtTime = (t) => {
+                    if (!t) return '';
+                    const [h, m] = t.split(':').map(Number);
+                    return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`;
+                };
+                return (
+                    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+                        <div className="bg-gray-900 border border-amber-600/40 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+                            {/* Header */}
+                            <div className="px-5 py-4 bg-amber-900/30 border-b border-amber-700/30 flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" className="w-5 h-5">
+                                        <rect x="3" y="4" width="18" height="18" rx="2"/>
+                                        <path d="M16 2v4M8 2v4M3 10h18"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="text-amber-300 font-bold text-sm">Table {table.number} is Reserved</p>
+                                    <p className="text-amber-500/80 text-xs">
+                                        {isOverdue
+                                            ? `Reservation was ${Math.abs(minsAway)} min ago`
+                                            : `Reservation in ${minsAway} min — within ${prepMins}-min prep window`}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Reservation details */}
+                            <div className="px-5 py-4 space-y-2.5">
+                                <div className="bg-gray-800/60 rounded-xl p-3.5 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" className="w-3.5 h-3.5 shrink-0">
+                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                        <span className="text-white font-semibold text-sm">{reservation.customer_name}</span>
+                                        {reservation.phone && (
+                                            <span className="text-gray-500 text-xs ml-auto">{reservation.phone}</span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-4 text-xs text-gray-400">
+                                        <span className="flex items-center gap-1">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3">
+                                                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                                            </svg>
+                                            {fmtTime(reservation.reservation_time)}
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3">
+                                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                                <circle cx="9" cy="7" r="4"/>
+                                            </svg>
+                                            {reservation.party_size} {reservation.party_size === 1 ? 'person' : 'people'}
+                                        </span>
+                                    </div>
+                                    {reservation.notes && (
+                                        <p className="text-gray-500 text-xs italic border-t border-gray-700/50 pt-2">"{reservation.notes}"</p>
+                                    )}
+                                </div>
+
+                                <p className="text-gray-400 text-xs">
+                                    {isOverdue
+                                        ? 'This table was reserved and the guest may be arriving soon. Are you sure you want to start a new order?'
+                                        : `Admin has set a ${prepMins}-minute preparation window. This table should be set up for the reservation.`}
+                                </p>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="px-5 pb-5 flex gap-2.5">
+                                <button
+                                    onClick={() => setReservationWarning(null)}
+                                    className="flex-1 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 font-semibold rounded-xl text-sm transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setReservationWarning(null);
+                                        dispatch(selectTable(table));
+                                    }}
+                                    className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-sm transition-colors"
+                                >
+                                    Seat Anyway
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
         </div>
     );

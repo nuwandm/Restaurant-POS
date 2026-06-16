@@ -632,9 +632,39 @@ class DatabaseManager {
           SELECT r.*, t.number as table_number
           FROM reservations r
           LEFT JOIN tables t ON r.table_id = t.id
-          WHERE r.reservation_date = ? AND r.status IN ('pending','confirmed')
+          WHERE r.reservation_date = ? AND r.status IN ('pending','confirmed','seated')
           ORDER BY r.reservation_time ASC
         `).all(today);
+      }
+
+      case "checkTableAvailability": {
+        // Returns any active reservation for a table within a time window on a given date
+        // data: { table_id, date, time, prepMinutes }
+        // Blocks if current time is within prepMinutes before reservation_time
+        const date = data.date || new Date().toLocaleDateString('en-CA');
+        const rows = this.db.prepare(`
+          SELECT r.*, t.number as table_number
+          FROM reservations r
+          LEFT JOIN tables t ON r.table_id = t.id
+          WHERE r.table_id = ? AND r.reservation_date = ?
+            AND r.status IN ('pending','confirmed')
+          ORDER BY r.reservation_time ASC
+        `).all(data.table_id, date);
+        return rows;
+      }
+
+      case "getReservationsByTable": {
+        // Get all active/upcoming reservations for a specific table
+        const today = new Date().toLocaleDateString('en-CA');
+        return this.db.prepare(`
+          SELECT r.*, t.number as table_number
+          FROM reservations r
+          LEFT JOIN tables t ON r.table_id = t.id
+          WHERE r.table_id = ?
+            AND r.reservation_date >= ?
+            AND r.status IN ('pending','confirmed')
+          ORDER BY r.reservation_date ASC, r.reservation_time ASC
+        `).all(data.table_id, today);
       }
 
       case "exportBackup": {
@@ -658,7 +688,7 @@ class DatabaseManager {
           shifts, voidKots, kotItems, kotSnapshots, kotCounters, orderCounters,
           reservations,
           exportedAt: new Date().toISOString(),
-          backupVersion: '3.2',
+          backupVersion: '3.3',
         };
       }
 

@@ -5,30 +5,70 @@ const ZONE_COLORS = [
     '#3b82f6','#10b981','#f59e0b','#8b5cf6','#f97316','#06b6d4','#ec4899','#84cc16',
 ];
 
-function TableCard({ table, selected, onSelect, order, reserved }) {
+function minsUntil(dateStr, timeStr) {
+    if (!dateStr || !timeStr) return null;
+    const resTime = new Date(`${dateStr}T${timeStr}`);
+    return Math.round((resTime - Date.now()) / 60000);
+}
+
+function fmtTime(t) {
+    if (!t) return '';
+    const [h, m] = t.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+function TableCard({ table, selected, onSelect, order, reservation, prepMins }) {
     const occ = table.status === 'occupied';
     const sel = selected;
     const hasOrder = order && order.items.length > 0;
+    const res = reservation; // full reservation object or null
+
+    // Compute how many minutes until reservation starts
+    const minsAway = res ? minsUntil(res.reservation_date, res.reservation_time) : null;
+    // Is the table in the prep-time window? (within prepMins minutes)
+    const inPrepWindow = minsAway !== null && minsAway >= 0 && minsAway <= prepMins;
+    // Is it past reservation time (guest should be here)?
+    const overdue = minsAway !== null && minsAway < 0;
 
     let cardCls, numberCls, statusCls, stripCls;
     if (sel && occ) {
-        cardCls  = 'border-yellow-400/80 bg-yellow-900/20 ring-2 ring-yellow-400/40 shadow-lg shadow-yellow-900/20';
+        cardCls   = 'border-yellow-400/80 bg-yellow-900/20 ring-2 ring-yellow-400/40 shadow-lg shadow-yellow-900/20';
         numberCls = 'text-yellow-300'; statusCls = 'text-yellow-400'; stripCls = 'bg-red-500/60';
     } else if (sel) {
-        cardCls  = 'border-blue-500/80 bg-blue-900/20 ring-2 ring-blue-500/40 shadow-lg shadow-blue-900/20';
-        numberCls = 'text-blue-300'; statusCls = 'text-blue-400'; stripCls = reserved ? 'bg-amber-500/60' : 'bg-green-500/40';
+        cardCls   = 'border-blue-500/80 bg-blue-900/20 ring-2 ring-blue-500/40 shadow-lg shadow-blue-900/20';
+        numberCls = 'text-blue-300'; statusCls = 'text-blue-400';
+        stripCls  = res ? (inPrepWindow || overdue ? 'bg-red-500/60' : 'bg-amber-500/60') : 'bg-green-500/40';
     } else if (occ) {
-        cardCls  = 'border-red-700/60 bg-red-900/20 hover:border-red-500/70 hover:bg-red-900/30';
+        cardCls   = 'border-red-700/60 bg-red-900/20 hover:border-red-500/70 hover:bg-red-900/30';
         numberCls = 'text-red-300'; statusCls = 'text-red-400'; stripCls = 'bg-red-500/60';
-    } else if (reserved) {
-        cardCls  = 'border-amber-600/60 bg-amber-900/20 hover:border-amber-500/70 hover:bg-amber-900/30';
-        numberCls = 'text-amber-300'; statusCls = 'text-amber-400'; stripCls = 'bg-amber-500/60';
+    } else if (res) {
+        if (inPrepWindow || overdue) {
+            // Prep window — table should be being set up
+            cardCls   = 'border-red-600/60 bg-red-900/15 hover:border-red-500/70';
+            numberCls = 'text-red-300'; statusCls = 'text-red-400'; stripCls = 'bg-red-500/70';
+        } else {
+            cardCls   = 'border-amber-600/60 bg-amber-900/20 hover:border-amber-500/70 hover:bg-amber-900/30';
+            numberCls = 'text-amber-300'; statusCls = 'text-amber-400'; stripCls = 'bg-amber-500/60';
+        }
     } else {
-        cardCls  = 'border-gray-700/60 bg-gray-800/40 hover:border-gray-500 hover:bg-gray-700/40';
+        cardCls   = 'border-gray-700/60 bg-gray-800/40 hover:border-gray-500 hover:bg-gray-700/40';
         numberCls = 'text-white'; statusCls = 'text-green-400'; stripCls = 'bg-green-500/40';
     }
 
     const subtotal = hasOrder ? order.items.reduce((s, i) => s + (!i.voided ? i.price * i.quantity : 0), 0) : 0;
+
+    // Status label
+    let statusLabel;
+    if (occ) {
+        statusLabel = null; // show amount instead
+    } else if (res) {
+        if (overdue) statusLabel = 'Due now';
+        else if (inPrepWindow) statusLabel = 'Prep';
+        else statusLabel = fmtTime(res.reservation_time);
+    } else {
+        statusLabel = 'Free';
+    }
 
     return (
         <button
@@ -57,18 +97,32 @@ function TableCard({ table, selected, onSelect, order, reserved }) {
                     </span>
                 ) : (
                     <span className={`text-[9px] font-semibold leading-none mt-0.5 ${statusCls}`}>
-                        {occ ? 'Busy' : reserved ? 'Reserved' : 'Free'}
+                        {statusLabel}
+                    </span>
+                )}
+
+                {/* Party size for reserved */}
+                {res && !occ && (
+                    <span className="text-[8px] text-gray-600 leading-none mt-0.5">
+                        {res.party_size}p
                     </span>
                 )}
             </div>
 
-            {/* Reserved icon */}
-            {reserved && !occ && (
+            {/* Reserved calendar icon / prep warning */}
+            {res && !occ && (
                 <div className="absolute top-1.5 right-1.5">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" className="w-3 h-3">
-                        <rect x="3" y="4" width="18" height="18" rx="2"/>
-                        <path d="M16 2v4M8 2v4M3 10h18"/>
-                    </svg>
+                    {inPrepWindow || overdue ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" className="w-3 h-3">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2"/>
+                        </svg>
+                    ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" className="w-3 h-3">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18"/>
+                        </svg>
+                    )}
                 </div>
             )}
 
@@ -86,10 +140,9 @@ function TableCard({ table, selected, onSelect, order, reserved }) {
     );
 }
 
-const TableGrid = ({ tables = [], onTableSelect, selectedTable, reservedTableIds = new Set() }) => {
+const TableGrid = ({ tables = [], onTableSelect, selectedTable, reservations = {}, prepMins = 30 }) => {
     const tableOrders = useSelector(s => s.orders.tableOrders);
 
-    // Group by zone from table.zone field, fallback to 'All'
     const zones = useMemo(() => {
         const map = {};
         tables.forEach(t => {
@@ -115,7 +168,6 @@ const TableGrid = ({ tables = [], onTableSelect, selectedTable, reservedTableIds
         <div className="space-y-3">
             {zones.map(([zone, zoneTables], zi) => (
                 <div key={zone}>
-                    {/* Zone header — only show if more than 1 zone */}
                     {zones.length > 1 && (
                         <div className="flex items-center gap-1.5 mb-1.5">
                             <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ZONE_COLORS[zi % ZONE_COLORS.length] }} />
@@ -131,7 +183,8 @@ const TableGrid = ({ tables = [], onTableSelect, selectedTable, reservedTableIds
                                 selected={selectedTable?.id === table.id}
                                 onSelect={onTableSelect}
                                 order={tableOrders[table.id]}
-                                reserved={reservedTableIds.has(table.id)}
+                                reservation={reservations[table.id] || null}
+                                prepMins={prepMins}
                             />
                         ))}
                     </div>

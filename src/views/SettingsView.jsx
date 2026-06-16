@@ -21,6 +21,7 @@ const DEFAULTS = {
     printKitchenTicket: true,
     autoCompleteOnPayment: true,
     orderPrefix: 'ORD',
+    tablePreparationTime: 30,   // minutes before reservation time to block the table
     // KOT
     kotEnabled: true,
     kitchenPrinterSeparate: false,  // false = print KOT on same cashier printer
@@ -391,7 +392,7 @@ const SettingsView = ({ onHotelNameChange }) => {
                     appShortcuts:   loadAppShortcuts(),
                     posZones:       JSON.parse(localStorage.getItem('posZones')       || '[]'),
                     discountRules:  JSON.parse(localStorage.getItem('discountRules')  || '[]'),
-                    backupVersion: '3.1',
+                    backupVersion: '3.3',
                     exportedAt: new Date().toISOString(),
                     exportedBy: settings.hotelName || 'Hotel POS',
                 };
@@ -615,6 +616,9 @@ const SettingsView = ({ onHotelNameChange }) => {
                                     <Field label="Number of Tables" hint="Syncs tables on Save">
                                         <Input type="number" value={settings.tableCount} onChange={set('tableCount')} min={1} max={100} />
                                     </Field>
+                                    <Field label="Table Preparation Time (minutes)" hint="Block reserved tables this many minutes before the booking time — staff can override">
+                                        <Input type="number" value={settings.tablePreparationTime ?? 30} onChange={set('tablePreparationTime')} min={0} max={120} />
+                                    </Field>
                                 </div>
                             </div>
                             <div className="bg-gray-800 rounded-xl p-5">
@@ -690,6 +694,7 @@ const SettingsView = ({ onHotelNameChange }) => {
                                         'KOT history & void log','Order & KOT counters',
                                         'Settings & shortcuts','POS zones',
                                         'Quick discount rules','Keyboard shortcuts',
+                                        'Table reservations & bookings','Table prep time setting',
                                     ].map(item => (
                                         <div key={item} className="flex items-center gap-1.5 text-xs text-gray-500">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" className="w-3 h-3 shrink-0"><path d="M20 6L9 17l-5-5"/></svg>
@@ -697,7 +702,7 @@ const SettingsView = ({ onHotelNameChange }) => {
                                         </div>
                                     ))}
                                 </div>
-                                <p className="text-gray-600 text-[10px]">Backup v3.1</p>
+                                <p className="text-gray-600 text-[10px]">Backup v3.3</p>
                                 <button
                                     onClick={handleExportBackup}
                                     disabled={!!backupStatus}

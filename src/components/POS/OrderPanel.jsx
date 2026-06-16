@@ -43,12 +43,12 @@ const OrderPanel = ({
     };
 
     return (
-        <div className="h-full flex flex-col bg-gray-800">
+        <div className="h-full flex flex-col bg-gray-850" style={{background:'#161b27'}}>
             {/* Header */}
             <div className="px-4 py-3 border-b border-gray-700/80 flex items-center justify-between shrink-0">
                 <div>
                     <div className="flex items-center gap-2">
-                        <h2 className="text-white font-bold text-sm">
+                        <h2 className="text-gray-200 font-bold text-sm">
                             {isTakeaway ? 'Takeaway Order' : 'Current Order'}
                         </h2>
                         {isTakeaway && (
@@ -101,9 +101,9 @@ const OrderPanel = ({
                         {/* Active items */}
                         {activeItems.map(item => (
                             <div key={item.orderItemId}
-                                className="bg-gray-700/50 border border-gray-700/80 rounded-xl px-3 py-2 flex items-center gap-2">
+                                className="bg-gray-700/25 border border-gray-700/40 rounded-xl px-3 py-2 flex items-center gap-2">
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-white text-xs font-semibold leading-tight truncate">{item.name}</p>
+                                    <p className="text-gray-200 text-xs font-semibold leading-tight truncate">{item.name}</p>
                                     <p className="text-gray-500 text-xs">{lkr(item.price)}</p>
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
@@ -112,7 +112,7 @@ const OrderPanel = ({
                                         <button
                                             onClick={() => setVoidTarget(item)}
                                             title="Void this item"
-                                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-red-900/30 hover:bg-red-600 text-red-400 hover:text-white transition-colors mr-0.5"
+                                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-red-900/20 hover:bg-red-600 text-red-400/60 hover:text-white transition-colors mr-0.5"
                                         >
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3 h-3">
                                                 <path d="M18 6L6 18M6 6l12 12"/>
@@ -121,12 +121,12 @@ const OrderPanel = ({
                                     )}
                                     <button
                                         onClick={() => onUpdateQuantity(item.orderItemId, item.quantity - 1)}
-                                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-600 hover:bg-red-600 text-white text-sm font-bold transition-colors"
+                                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-600/50 hover:bg-red-700 text-gray-300 hover:text-white text-sm font-bold transition-colors"
                                     >−</button>
-                                    <span className="w-6 text-center text-white text-sm font-bold">{item.quantity}</span>
+                                    <span className="w-6 text-center text-gray-200 text-sm font-bold">{item.quantity}</span>
                                     <button
                                         onClick={() => onUpdateQuantity(item.orderItemId, item.quantity + 1)}
-                                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-600 hover:bg-green-600 text-white text-sm font-bold transition-colors"
+                                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-600/50 hover:bg-green-700 text-gray-300 hover:text-white text-sm font-bold transition-colors"
                                     >+</button>
                                 </div>
                             </div>
@@ -180,9 +180,9 @@ const OrderPanel = ({
                             <span>- {lkr(discountAmt)}</span>
                         </div>
                     )}
-                    <div className="flex justify-between text-sm font-bold text-white border-t border-gray-700 pt-1.5">
+                    <div className="flex justify-between text-sm font-bold text-gray-200 border-t border-gray-700/50 pt-1.5">
                         <span>Total</span>
-                        <span className="text-green-400 text-base">{lkr(finalTotal)}</span>
+                        <span className="text-green-300 text-base">{lkr(finalTotal)}</span>
                     </div>
                 </div>
 
